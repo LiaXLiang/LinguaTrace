@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker?url";
 import { createWorker } from "tesseract.js";
+import AuthPanel from "./AuthPanel";
+import { supabase } from "./supabaseClient";
 import "./App.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -20,6 +22,9 @@ const STARTER_LABELS = [
 export default function App() {
   const pageRef = useRef(null);
   const canvasRef = useRef(null);
+
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const [view, setView] = useState("reader");
   const [historyMode, setHistoryMode] = useState("byPdf");
@@ -50,6 +55,27 @@ export default function App() {
   const [extractError, setExtractError] = useState("");
 
   useEffect(() => {
+    async function loadUser() {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+      setAuthLoading(false);
+    }
+
+    loadUser();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user || null);
+        setAuthLoading(false);
+      }
+    );
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
 
     if (saved) {
@@ -78,6 +104,16 @@ export default function App() {
       renderPage(pdfDoc, currentPage, scale);
     }
   }, [view]);
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    setView("reader");
+    setPdfDoc(null);
+    setPdfName("");
+    setAnnotations([]);
+    setDraftRect(null);
+    setStatus("Signed out.");
+  }
 
   async function handlePdfUpload(event) {
     const file = event.target.files[0];
@@ -480,6 +516,20 @@ export default function App() {
       ? groupBy(annotations, (item) => item.pdfName || "Untitled PDF")
       : groupBy(annotations, (item) => item.label || "Unlabeled");
 
+  if (authLoading) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <h2>Loading LinguaTrace...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPanel />;
+  }
+
   if (view === "history") {
     return (
       <div className="app-shell">
@@ -492,9 +542,15 @@ export default function App() {
             </div>
           </div>
 
-          <button className="user-button" onClick={() => setView("reader")}>
-            Back to Reader
-          </button>
+          <div className="card-actions">
+            <button className="user-button" onClick={() => setView("reader")}>
+              Back to Reader
+            </button>
+
+            <button className="user-button" onClick={signOut}>
+              Sign Out
+            </button>
+          </div>
         </header>
 
         <main className="history-page">
@@ -549,7 +605,9 @@ export default function App() {
                           <input
                             className="label-input"
                             value={editingLabel}
-                            onChange={(event) => setEditingLabel(event.target.value)}
+                            onChange={(event) =>
+                              setEditingLabel(event.target.value)
+                            }
                             placeholder="Edit label"
                           />
 
@@ -559,7 +617,9 @@ export default function App() {
                                 key={label}
                                 type="button"
                                 className={
-                                  editingLabel === label ? "label-chip active" : "label-chip"
+                                  editingLabel === label
+                                    ? "label-chip active"
+                                    : "label-chip"
                                 }
                                 onClick={() => setEditingLabel(label)}
                               >
@@ -652,9 +712,15 @@ export default function App() {
           </div>
         </div>
 
-        <button className="user-button" onClick={() => setView("history")}>
-          User Info / Note History
-        </button>
+        <div className="card-actions">
+          <button className="user-button" onClick={() => setView("history")}>
+            User Info / Note History
+          </button>
+
+          <button className="user-button" onClick={signOut}>
+            Sign Out
+          </button>
+        </div>
       </header>
 
       <main className="workspace">
