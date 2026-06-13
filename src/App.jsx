@@ -422,7 +422,33 @@ export default function App() {
       return;
     }
 
-    await goToPage(annotation.pageNumber);
+    setView("reader");
+    setCurrentPage(annotation.pageNumber);
+
+    setDraftRect(null);
+    setLabelText("");
+    setNoteText("");
+    setExtractedText("");
+    setExtractError("");
+
+    await renderPage(pdfDoc, annotation.pageNumber, scale);
+
+    setTimeout(() => {
+      const pageElement = pageRef.current;
+      if (!pageElement) return;
+
+      const targetY = annotation.rect.y * pageSize.height;
+
+      pageElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      window.scrollBy({
+        top: targetY - window.innerHeight / 2,
+        behavior: "smooth",
+      });
+    }, 100);
   }
 
   function rectToStyle(rect) {
@@ -523,11 +549,24 @@ export default function App() {
                           <input
                             className="label-input"
                             value={editingLabel}
-                            onChange={(event) =>
-                              setEditingLabel(event.target.value)
-                            }
+                            onChange={(event) => setEditingLabel(event.target.value)}
                             placeholder="Edit label"
                           />
+
+                          <div className="label-suggestions">
+                            {customLabels.map((label) => (
+                              <button
+                                key={label}
+                                type="button"
+                                className={
+                                  editingLabel === label ? "label-chip active" : "label-chip"
+                                }
+                                onClick={() => setEditingLabel(label)}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
 
                           <textarea
                             value={editingNote}
