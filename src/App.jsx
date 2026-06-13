@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker?url";
+import { createWorker } from "tesseract.js";
 import "./App.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+const STORAGE_KEY = "linguatrace_annotations";
 
 const STARTER_LABELS = [
   "Vocabulary",
@@ -38,6 +41,38 @@ export default function App() {
   const [customLabels, setCustomLabels] = useState(STARTER_LABELS);
   const [noteText, setNoteText] = useState("");
 
+  const [editingId, setEditingId] = useState(null);
+  const [editingLabel, setEditingLabel] = useState("");
+  const [editingNote, setEditingNote] = useState("");
+
+  const [extractedText, setExtractedText] = useState("");
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractError, setExtractError] = useState("");
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setAnnotations(parsed);
+
+        const savedLabels = parsed
+          .map((item) => item.label)
+          .filter(Boolean)
+          .filter((label) => !STARTER_LABELS.includes(label));
+
+        setCustomLabels([...new Set([...savedLabels, ...STARTER_LABELS])]);
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(annotations));
+  }, [annotations]);
+
   useEffect(() => {
     if (view === "reader" && pdfDoc && canvasRef.current && pageRef.current) {
       renderPage(pdfDoc, currentPage, scale);
@@ -50,20 +85,56 @@ export default function App() {
 
     setPdfName(file.name);
     setStatus("Loading PDF...");
-    setAnnotations([]);
     setDraftRect(null);
     setLabelText("");
     setNoteText("");
+    setExtractedText("");
+    setExtractError("");
 
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-    setPdfDoc(pdf);
-    setTotalPages(pdf.numPages);
-    setCurrentPage(1);
-    setStatus(`Loaded: ${file.name}`);
+      setPdfDoc(pdf);
+      setTotalPages(pdf.numPages);
+      setCurrentPage(1);
+      setStatus(`Loaded: ${file.name}`);
 
-    await renderPage(pdf, 1, scale);
+      await renderPage(pdf, 1, scale);
+    } catch {
+      setStatus("Failed to load PDF.");
+    }
+  }
+
+  async function extractTextWithOcrFromSelection() {
+    if (!canvasRef.current || !draftRect) return "";
+
+    const sourceCanvas = canvasRef.current;
+    const cropCanvas = document.createElement("canvas");
+
+    cropCanvas.width = draftRect.width;
+    cropCanvas.height = draftRect.height;
+
+    const cropContext = cropCanvas.getContext("2d");
+
+    cropContext.drawImage(
+      sourceCanvas,
+      draftRect.x,
+      draftRect.y,
+      draftRect.width,
+      draftRect.height,
+      0,
+      0,
+      draftRect.width,
+      draftRect.height
+    );
+
+    const worker = await createWorker("kor+eng");
+    const result = await worker.recognize(cropCanvas);
+
+    await worker.terminate();
+
+    return result.data.text.replace(/\s+/g, " ").trim();
   }
 
   async function renderPage(pdf, pageNumber, nextScale = scale) {
@@ -93,13 +164,19 @@ export default function App() {
   }
 
   async function goToPage(pageNumber) {
-    if (!pdfDoc) return;
+    if (!pdfDoc) {
+      setStatus("Please upload the source PDF first.");
+      return;
+    }
+
     if (pageNumber < 1 || pageNumber > totalPages) return;
 
     setCurrentPage(pageNumber);
     setDraftRect(null);
     setLabelText("");
     setNoteText("");
+    setExtractedText("");
+    setExtractError("");
     setStatus(`Page ${pageNumber} / ${totalPages}`);
     setView("reader");
 
@@ -113,6 +190,8 @@ export default function App() {
 
     setScale(safeScale);
     setDraftRect(null);
+    setExtractedText("");
+    setExtractError("");
 
     await renderPage(pdfDoc, currentPage, safeScale);
   }
@@ -133,6 +212,8 @@ export default function App() {
 
     setIsDragging(true);
     setStartPoint(point);
+    setExtractedText("");
+    setExtractError("");
 
     setDraftRect({
       x: point.x,
@@ -165,6 +246,96 @@ export default function App() {
     }
   }
 
+  function appendExtractedTextToNote(text) {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    setExtractedText(cleanText);
+
+    setNoteText((prev) => {
+      if (!prev.trim()) return cleanText;
+      return `${prev}\n\n${cleanText}`;
+    });
+  }
+
+  async function extractTextFromSelection() {
+    if (!pdfDoc || !draftRect || !pageSize.width || !pageSize.height) {
+      return "";
+    }
+
+    const page = await pdfDoc.getPage(currentPage);
+    const viewport = page.getViewport({ scale });
+    const textContent = await page.getTextContent();
+
+    const selectionLeft = draftRect.x;
+    const selectionRight = draftRect.x + draftRect.width;
+    const selectionTop = draftRect.y;
+    const selectionBottom = draftRect.y + draftRect.height;
+
+    const selectedItems = textContent.items.filter((item) => {
+      const transformed = pdfjsLib.Util.transform(
+        viewport.transform,
+        item.transform
+      );
+
+      const x = transformed[4];
+      const y = transformed[5];
+
+      const fontHeight = Math.abs(transformed[3]) || 10;
+      const itemWidth = item.width * scale;
+
+      const itemLeft = x;
+      const itemRight = x + itemWidth;
+      const itemTop = y - fontHeight;
+      const itemBottom = y;
+
+      return (
+        itemRight >= selectionLeft &&
+        itemLeft <= selectionRight &&
+        itemBottom >= selectionTop &&
+        itemTop <= selectionBottom
+      );
+    });
+
+    return selectedItems
+      .map((item) => item.str)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  async function handleExtractText() {
+    if (!draftRect) return;
+
+    setIsExtracting(true);
+    setExtractError("");
+
+    try {
+      let text = await extractTextFromSelection();
+
+      if (!text.trim()) {
+        text = await extractTextWithOcrFromSelection();
+      }
+
+      if (!text.trim()) {
+        setExtractedText("");
+        setExtractError("OCR could not recognize text in this selected area.");
+        return;
+      }
+
+      appendExtractedTextToNote(text);
+    } catch {
+      setExtractError("Failed to extract or OCR text from this PDF selection.");
+    } finally {
+      setIsExtracting(false);
+    }
+  }
+
+  async function copyExtractedText() {
+    if (!extractedText) return;
+    await navigator.clipboard.writeText(extractedText);
+  }
+
   function saveAnnotation() {
     if (!draftRect || !pageSize.width || !pageSize.height) return;
 
@@ -184,6 +355,7 @@ export default function App() {
       rect: normalizedRect,
       label: finalLabel,
       note: noteText.trim(),
+      extractedText: extractedText.trim(),
       createdAt: new Date().toISOString(),
     };
 
@@ -197,13 +369,59 @@ export default function App() {
     setDraftRect(null);
     setLabelText("");
     setNoteText("");
+    setExtractedText("");
+    setExtractError("");
+    setStatus("Note saved locally.");
   }
 
   function deleteAnnotation(id) {
     setAnnotations((prev) => prev.filter((item) => item.id !== id));
   }
 
+  function startEditAnnotation(annotation) {
+    setEditingId(annotation.id);
+    setEditingLabel(annotation.label || "");
+    setEditingNote(annotation.note || "");
+  }
+
+  function cancelEditAnnotation() {
+    setEditingId(null);
+    setEditingLabel("");
+    setEditingNote("");
+  }
+
+  function saveEditedAnnotation(id) {
+    const finalLabel = editingLabel.trim() || "Unlabeled";
+
+    setAnnotations((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              label: finalLabel,
+              note: editingNote.trim(),
+              updatedAt: new Date().toISOString(),
+            }
+          : item
+      )
+    );
+
+    setCustomLabels((prev) => {
+      if (prev.includes(finalLabel)) return prev;
+      return [finalLabel, ...prev];
+    });
+
+    cancelEditAnnotation();
+    setStatus("Note updated locally.");
+  }
+
   async function jumpToAnnotation(annotation) {
+    if (!pdfDoc) {
+      setStatus("Please upload the source PDF first, then open this note.");
+      setView("reader");
+      return;
+    }
+
     await goToPage(annotation.pageNumber);
   }
 
@@ -226,7 +444,7 @@ export default function App() {
   }
 
   const currentPageAnnotations = annotations.filter(
-    (item) => item.pageNumber === currentPage
+    (item) => item.pageNumber === currentPage && item.pdfName === pdfName
   );
 
   const latestNotes = annotations.slice(0, 5);
@@ -241,7 +459,7 @@ export default function App() {
       <div className="app-shell">
         <header className="topbar">
           <div className="brand" onClick={() => setView("reader")}>
-            <span className="brand-mark">LX</span>
+            <span className="brand-mark">LT</span>
             <div>
               <h1>LinguaTrace</h1>
               <p>语迹 · Language Learning Notebook</p>
@@ -300,26 +518,79 @@ export default function App() {
                         {annotation.pageNumber}
                       </p>
 
-                      {annotation.label && (
-                        <span className="note-label">{annotation.label}</span>
-                      )}
+                      {editingId === annotation.id ? (
+                        <>
+                          <input
+                            className="label-input"
+                            value={editingLabel}
+                            onChange={(event) =>
+                              setEditingLabel(event.target.value)
+                            }
+                            placeholder="Edit label"
+                          />
 
-                      <p className="note-body">
-                        {annotation.note || "No note content."}
-                      </p>
+                          <textarea
+                            value={editingNote}
+                            onChange={(event) =>
+                              setEditingNote(event.target.value)
+                            }
+                            placeholder="Edit note"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          {annotation.label && (
+                            <span className="note-label">
+                              {annotation.label}
+                            </span>
+                          )}
+
+                          <p className="note-body">
+                            {annotation.note || "No note content."}
+                          </p>
+
+                          {annotation.extractedText && (
+                            <p className="note-body">
+                              {annotation.extractedText}
+                            </p>
+                          )}
+                        </>
+                      )}
                     </div>
 
                     <div className="card-actions">
-                      <button onClick={() => jumpToAnnotation(annotation)}>
-                        Open Source
-                      </button>
+                      {editingId === annotation.id ? (
+                        <>
+                          <button
+                            onClick={() => saveEditedAnnotation(annotation.id)}
+                          >
+                            Save
+                          </button>
 
-                      <button
-                        className="delete-button"
-                        onClick={() => deleteAnnotation(annotation.id)}
-                      >
-                        Delete
-                      </button>
+                          <button onClick={cancelEditAnnotation}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => jumpToAnnotation(annotation)}>
+                            Open Source
+                          </button>
+
+                          <button
+                            onClick={() => startEditAnnotation(annotation)}
+                          >
+                            Modify
+                          </button>
+
+                          <button
+                            className="delete-button"
+                            onClick={() => deleteAnnotation(annotation.id)}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -436,14 +707,44 @@ export default function App() {
 
             {draftRect ? (
               <>
-                <p className="selected-text">New highlight on Page {currentPage}</p>
+                <p className="selected-text">
+                  New highlight on Page {currentPage}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleExtractText}
+                  disabled={isExtracting}
+                >
+                  {isExtracting ? "Extracting..." : "Extract Text"}
+                </button>
+
+                {extractError && <p className="error-text">{extractError}</p>}
+
+                {extractedText && (
+                  <div className="ocr-result-card">
+                    <div className="section-title-row">
+                      <h3>Extracted Text</h3>
+
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={copyExtractedText}
+                      >
+                        Copy
+                      </button>
+                    </div>
+
+                    <p>{extractedText}</p>
+                  </div>
+                )}
 
                 <div className="label-composer">
                   <input
                     className="label-input"
                     value={labelText}
                     onChange={(event) => setLabelText(event.target.value)}
-                    placeholder="Create or choose a label, e.g. Particles / Honorifics / Vocabulary"
+                    placeholder="Create or choose a label"
                   />
 
                   <div className="label-suggestions">
@@ -452,7 +753,9 @@ export default function App() {
                         key={label}
                         type="button"
                         className={
-                          labelText === label ? "label-chip active" : "label-chip"
+                          labelText === label
+                            ? "label-chip active"
+                            : "label-chip"
                         }
                         onClick={() => setLabelText(label)}
                       >
@@ -480,7 +783,10 @@ export default function App() {
           <section className="latest-card">
             <div className="section-title-row">
               <h2>Latest Notes</h2>
-              <button className="ghost-button" onClick={() => setView("history")}>
+              <button
+                className="ghost-button"
+                onClick={() => setView("history")}
+              >
                 View All
               </button>
             </div>
@@ -492,7 +798,10 @@ export default function App() {
 
               {latestNotes.map((annotation) => (
                 <div className="note-card" key={annotation.id}>
-                  <p className="page-info">Page {annotation.pageNumber}</p>
+                  <p className="page-info">
+                    {annotation.pdfName || "Untitled PDF"} · Page{" "}
+                    {annotation.pageNumber}
+                  </p>
 
                   {annotation.label && (
                     <span className="note-label">{annotation.label}</span>
