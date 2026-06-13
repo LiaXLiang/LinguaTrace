@@ -241,7 +241,7 @@ export default function App() {
       <div className="app-shell">
         <header className="topbar">
           <div className="brand" onClick={() => setView("reader")}>
-            <span className="brand-mark">LT</span>
+            <span className="brand-mark">LX</span>
             <div>
               <h1>LinguaTrace</h1>
               <p>语迹 · Language Learning Notebook</p>
