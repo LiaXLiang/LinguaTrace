@@ -8,8 +8,6 @@ import "./App.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-const STORAGE_KEY = "linguatrace_annotations";
-
 const STARTER_LABELS = [
   "Vocabulary",
   "Grammar",
@@ -18,6 +16,38 @@ const STARTER_LABELS = [
   "Mistake",
   "Question",
 ];
+
+const PDF_BUCKET = "pdf-documents";
+
+function dbAnnotationToAppAnnotation(item) {
+  return {
+    id: item.id,
+    pdfName: item.pdf_name,
+    pageNumber: item.page_number,
+    rect: item.rect,
+    label: item.label,
+    note: item.note || "",
+    extractedText: item.extracted_text || "",
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+    noteType: item.note_type || "normal",
+    cardFront: item.card_front || "",
+    cardBack: item.card_back || "",
+  };
+}
+
+function dbPdfToAppPdf(item) {
+  return {
+    id: item.id,
+    userId: item.user_id,
+    fileName: item.file_name,
+    storagePath: item.storage_path,
+    lastPage: item.last_page || 1,
+    totalPages: item.total_pages || 0,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+  };
+}
 
 export default function App() {
   const pageRef = useRef(null);
@@ -30,6 +60,8 @@ export default function App() {
   const [historyMode, setHistoryMode] = useState("byPdf");
 
   const [pdfDoc, setPdfDoc] = useState(null);
+  const [activePdfId, setActivePdfId] = useState(null);
+  const [pdfLibrary, setPdfLibrary] = useState([]);
   const [pdfName, setPdfName] = useState("");
   const [status, setStatus] = useState("Upload a language-learning PDF to start.");
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,6 +78,10 @@ export default function App() {
   const [customLabels, setCustomLabels] = useState(STARTER_LABELS);
   const [noteText, setNoteText] = useState("");
 
+  const [noteType, setNoteType] = useState("normal");
+  const [cardFront, setCardFront] = useState("");
+  const [cardBack, setCardBack] = useState("");
+
   const [editingId, setEditingId] = useState(null);
   const [editingLabel, setEditingLabel] = useState("");
   const [editingNote, setEditingNote] = useState("");
@@ -54,19 +90,183 @@ export default function App() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
 
+  const [latestLimit, setLatestLimit] = useState(10);
+
+  function resetSelectionState() {
+    setDraftRect(null);
+    setLabelText("");
+    setNoteText("");
+    setExtractedText("");
+    setExtractError("");
+    setNoteType("normal");
+    setCardFront("");
+    setCardBack("");
+  }
+
+  async function loadAnnotations(currentUser) {
+    if (!currentUser) return;
+
+    const { data, error } = await supabase
+      .from("annotations")
+      .select("*")
+      .eq("user_id", currentUser.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setStatus("Failed to load notes from database.");
+      return;
+    }
+
+    const formatted = data.map(dbAnnotationToAppAnnotation);
+    setAnnotations(formatted);
+
+    const savedLabels = formatted
+      .map((item) => item.label)
+      .filter(Boolean)
+      .filter((label) => !STARTER_LABELS.includes(label));
+
+    setCustomLabels([...new Set([...savedLabels, ...STARTER_LABELS])]);
+  }
+
+  async function loadPdfLibrary(currentUser) {
+    if (!currentUser) return [];
+
+    const { data, error } = await supabase
+      .from("pdf_documents")
+      .select("*")
+      .eq("user_id", currentUser.id)
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      setStatus("Failed to load your PDF Codex.");
+      return [];
+    }
+
+    const formatted = data.map(dbPdfToAppPdf);
+    setPdfLibrary(formatted);
+    return formatted;
+  }
+
+  async function openPdfFromLibrary(pdfItem, targetPage = pdfItem.lastPage || 1) {
+    if (!pdfItem) return;
+
+    setStatus(`Opening ${pdfItem.fileName}...`);
+    resetSelectionState();
+
+    const { data, error } = await supabase.storage
+      .from(PDF_BUCKET)
+      .download(pdfItem.storagePath);
+
+    if (error) {
+      setStatus("Failed to open saved PDF from storage.");
+      return;
+    }
+
+    try {
+      const arrayBuffer = await data.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const safePage = Math.min(Math.max(targetPage || 1, 1), pdf.numPages);
+
+      setPdfDoc(pdf);
+      setActivePdfId(pdfItem.id);
+      setPdfName(pdfItem.fileName);
+      setTotalPages(pdf.numPages);
+      setCurrentPage(safePage);
+      setView("reader");
+      setStatus(`Loaded: ${pdfItem.fileName}`);
+
+      await renderPage(pdf, safePage, scale);
+
+      await supabase
+        .from("pdf_documents")
+        .update({
+          last_page: safePage,
+          total_pages: pdf.numPages,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", pdfItem.id)
+        .eq("user_id", pdfItem.userId);
+
+      setPdfLibrary((prev) =>
+        prev.map((item) =>
+          item.id === pdfItem.id
+            ? { ...item, lastPage: safePage, totalPages: pdf.numPages }
+            : item
+        )
+      );
+    } catch {
+      setStatus("Failed to render saved PDF.");
+    }
+  }
+
+  async function rememberCurrentPdfPage(pageNumber) {
+    if (!user || !activePdfId) return;
+
+    const updatedAt = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("pdf_documents")
+      .update({ last_page: pageNumber, updated_at: updatedAt })
+      .eq("id", activePdfId)
+      .eq("user_id", user.id);
+
+    if (!error) {
+      setPdfLibrary((prev) =>
+        prev.map((item) =>
+          item.id === activePdfId
+            ? { ...item, lastPage: pageNumber, updatedAt }
+            : item
+        )
+      );
+    }
+  }
+
+  async function bootstrapUser(currentUser) {
+    if (!currentUser) return;
+
+    await loadAnnotations(currentUser);
+    const library = await loadPdfLibrary(currentUser);
+
+    if (library.length > 0) {
+      await openPdfFromLibrary(library[0], library[0].lastPage || 1);
+    }
+  }
+
   useEffect(() => {
     async function loadUser() {
       const { data } = await supabase.auth.getUser();
-      setUser(data.user);
+      const currentUser = data.user || null;
+
+      setUser(currentUser);
+
+      if (currentUser) {
+        await bootstrapUser(currentUser);
+      }
+
       setAuthLoading(false);
     }
 
     loadUser();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user || null);
+      async (_event, session) => {
+        const currentUser = session?.user || null;
+
+        setUser(currentUser);
         setAuthLoading(false);
+
+        if (currentUser) {
+          await bootstrapUser(currentUser);
+        } else {
+          setAnnotations([]);
+          setPdfLibrary([]);
+          setCustomLabels(STARTER_LABELS);
+          setPdfDoc(null);
+          setActivePdfId(null);
+          setPdfName("");
+          setTotalPages(0);
+          setCurrentPage(1);
+        }
       }
     );
 
@@ -76,30 +276,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setAnnotations(parsed);
-
-        const savedLabels = parsed
-          .map((item) => item.label)
-          .filter(Boolean)
-          .filter((label) => !STARTER_LABELS.includes(label));
-
-        setCustomLabels([...new Set([...savedLabels, ...STARTER_LABELS])]);
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(annotations));
-  }, [annotations]);
-
-  useEffect(() => {
     if (view === "reader" && pdfDoc && canvasRef.current && pageRef.current) {
       renderPage(pdfDoc, currentPage, scale);
     }
@@ -107,38 +283,85 @@ export default function App() {
 
   async function signOut() {
     await supabase.auth.signOut();
+
+    setUser(null);
     setView("reader");
     setPdfDoc(null);
+    setActivePdfId(null);
+    setPdfLibrary([]);
     setPdfName("");
     setAnnotations([]);
+    setCustomLabels(STARTER_LABELS);
     setDraftRect(null);
     setStatus("Signed out.");
   }
 
   async function handlePdfUpload(event) {
     const file = event.target.files[0];
-    if (!file) return;
+    if (!file || !user) return;
 
     setPdfName(file.name);
-    setStatus("Loading PDF...");
-    setDraftRect(null);
-    setLabelText("");
-    setNoteText("");
-    setExtractedText("");
-    setExtractError("");
+    setStatus("Uploading and loading PDF...");
+    resetSelectionState();
+
+    const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storagePath = `${user.id}/${Date.now()}-${safeFileName}`;
+
+    const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
+    console.log("Buckets visible from frontend:", buckets);
+    console.log("Bucket list error:", bucketError);
+    console.log("Current user id:", user.id);
+    console.log("Trying bucket:", PDF_BUCKET);
+
+    const { error: uploadError } = await supabase.storage
+      .from(PDF_BUCKET)
+      .upload(storagePath, file, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Storage upload error:", uploadError)
+      setStatus(`Upload failed: ${uploadError.message}`);
+      return;
+    }
 
     try {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
+      const { data: pdfRow, error: dbError } = await supabase
+        .from("pdf_documents")
+        .insert({
+          user_id: user.id,
+          file_name: file.name,
+          storage_path: storagePath,
+          last_page: 1,
+          total_pages: pdf.numPages,
+        })
+        .select()
+        .single();
+
+      if (dbError) {
+        setStatus("PDF uploaded, but failed to save PDF metadata.");
+        return;
+      }
+
+      const newPdf = dbPdfToAppPdf(pdfRow);
+
+      setPdfLibrary((prev) => [newPdf, ...prev]);
       setPdfDoc(pdf);
+      setActivePdfId(newPdf.id);
       setTotalPages(pdf.numPages);
       setCurrentPage(1);
-      setStatus(`Loaded: ${file.name}`);
+      setView("reader");
+      setStatus(`Loaded and saved: ${file.name}`);
 
       await renderPage(pdf, 1, scale);
     } catch {
       setStatus("Failed to load PDF.");
+    } finally {
+      event.target.value = "";
     }
   }
 
@@ -201,22 +424,19 @@ export default function App() {
 
   async function goToPage(pageNumber) {
     if (!pdfDoc) {
-      setStatus("Please upload the source PDF first.");
+      setStatus("Please upload or open a saved PDF first.");
       return;
     }
 
     if (pageNumber < 1 || pageNumber > totalPages) return;
 
     setCurrentPage(pageNumber);
-    setDraftRect(null);
-    setLabelText("");
-    setNoteText("");
-    setExtractedText("");
-    setExtractError("");
+    resetSelectionState();
     setStatus(`Page ${pageNumber} / ${totalPages}`);
     setView("reader");
 
     await renderPage(pdfDoc, pageNumber, scale);
+    await rememberCurrentPdfPage(pageNumber);
   }
 
   async function changeZoom(nextScale) {
@@ -372,8 +592,8 @@ export default function App() {
     await navigator.clipboard.writeText(extractedText);
   }
 
-  function saveAnnotation() {
-    if (!draftRect || !pageSize.width || !pageSize.height) return;
+  async function saveAnnotation() {
+    if (!user || !draftRect || !pageSize.width || !pageSize.height) return;
 
     const finalLabel = labelText.trim() || "Unlabeled";
 
@@ -384,16 +604,29 @@ export default function App() {
       height: draftRect.height / pageSize.height,
     };
 
-    const newAnnotation = {
-      id: crypto.randomUUID(),
-      pdfName,
-      pageNumber: currentPage,
-      rect: normalizedRect,
-      label: finalLabel,
-      note: noteText.trim(),
-      extractedText: extractedText.trim(),
-      createdAt: new Date().toISOString(),
-    };
+    const { data, error } = await supabase
+      .from("annotations")
+      .insert({
+        user_id: user.id,
+        pdf_name: pdfName || "Untitled PDF",
+        page_number: currentPage,
+        rect: normalizedRect,
+        label: finalLabel,
+        note: noteText.trim(),
+        extracted_text: "",
+        note_type: noteType,
+        card_front: noteType === "flashcard" ? cardFront.trim() : "",
+        card_back: noteType === "flashcard" ? cardBack.trim() : "",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      setStatus("Failed to save note to database.");
+      return;
+    }
+
+    const newAnnotation = dbAnnotationToAppAnnotation(data);
 
     setAnnotations((prev) => [newAnnotation, ...prev]);
 
@@ -402,15 +635,18 @@ export default function App() {
       return [finalLabel, ...prev];
     });
 
-    setDraftRect(null);
-    setLabelText("");
-    setNoteText("");
-    setExtractedText("");
-    setExtractError("");
-    setStatus("Note saved locally.");
+    resetSelectionState();
+    setStatus("Note saved.");
   }
 
-  function deleteAnnotation(id) {
+  async function deleteAnnotation(id) {
+    const { error } = await supabase.from("annotations").delete().eq("id", id);
+
+    if (error) {
+      setStatus("Failed to delete note.");
+      return;
+    }
+
     setAnnotations((prev) => prev.filter((item) => item.id !== id));
   }
 
@@ -426,8 +662,23 @@ export default function App() {
     setEditingNote("");
   }
 
-  function saveEditedAnnotation(id) {
+  async function saveEditedAnnotation(id) {
     const finalLabel = editingLabel.trim() || "Unlabeled";
+    const updatedAt = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("annotations")
+      .update({
+        label: finalLabel,
+        note: editingNote.trim(),
+        updated_at: updatedAt,
+      })
+      .eq("id", id);
+
+    if (error) {
+      setStatus("Failed to update note.");
+      return;
+    }
 
     setAnnotations((prev) =>
       prev.map((item) =>
@@ -436,7 +687,7 @@ export default function App() {
               ...item,
               label: finalLabel,
               note: editingNote.trim(),
-              updatedAt: new Date().toISOString(),
+              updatedAt,
             }
           : item
       )
@@ -448,32 +699,35 @@ export default function App() {
     });
 
     cancelEditAnnotation();
-    setStatus("Note updated locally.");
+    setStatus("Note updated.");
   }
 
   async function jumpToAnnotation(annotation) {
-    if (!pdfDoc) {
-      setStatus("Please upload the source PDF first, then open this note.");
+    const matchingPdf = pdfLibrary.find(
+      (item) => item.fileName === annotation.pdfName
+    );
+
+    if (!pdfDoc || pdfName !== annotation.pdfName) {
+      if (!matchingPdf) {
+        setStatus("This note's source PDF is not in your PDF Codex yet.");
+        setView("reader");
+        return;
+      }
+
+      await openPdfFromLibrary(matchingPdf, annotation.pageNumber);
+    } else {
       setView("reader");
-      return;
+      setCurrentPage(annotation.pageNumber);
+      resetSelectionState();
+      await renderPage(pdfDoc, annotation.pageNumber, scale);
+      await rememberCurrentPdfPage(annotation.pageNumber);
     }
-
-    setView("reader");
-    setCurrentPage(annotation.pageNumber);
-
-    setDraftRect(null);
-    setLabelText("");
-    setNoteText("");
-    setExtractedText("");
-    setExtractError("");
-
-    await renderPage(pdfDoc, annotation.pageNumber, scale);
 
     setTimeout(() => {
       const pageElement = pageRef.current;
       if (!pageElement) return;
 
-      const targetY = annotation.rect.y * pageSize.height;
+      const targetY = annotation.rect.y * pageElement.offsetHeight;
 
       pageElement.scrollIntoView({
         behavior: "smooth",
@@ -485,6 +739,47 @@ export default function App() {
         behavior: "smooth",
       });
     }, 100);
+  }
+
+  async function deletePdfDocument(pdfItem) {
+    const confirmed = window.confirm(
+      `Delete ${pdfItem.fileName} from your PDF Codex? Existing notes will remain.`
+    );
+
+    if (!confirmed) return;
+
+    const { error: storageError } = await supabase.storage
+      .from(PDF_BUCKET)
+      .remove([pdfItem.storagePath]);
+
+    if (storageError) {
+      setStatus("Failed to delete PDF file from storage.");
+      return;
+    }
+
+    const { error: dbError } = await supabase
+      .from("pdf_documents")
+      .delete()
+      .eq("id", pdfItem.id)
+      .eq("user_id", user.id);
+
+    if (dbError) {
+      setStatus("Failed to delete PDF metadata.");
+      return;
+    }
+
+    setPdfLibrary((prev) => prev.filter((item) => item.id !== pdfItem.id));
+
+    if (activePdfId === pdfItem.id) {
+      setPdfDoc(null);
+      setActivePdfId(null);
+      setPdfName("");
+      setCurrentPage(1);
+      setTotalPages(0);
+      setPageSize({ width: 0, height: 0 });
+    }
+
+    setStatus("PDF removed from your PDF Codex.");
   }
 
   function rectToStyle(rect) {
@@ -509,7 +804,7 @@ export default function App() {
     (item) => item.pageNumber === currentPage && item.pdfName === pdfName
   );
 
-  const latestNotes = annotations.slice(0, 5);
+  const latestNotes = annotations.slice(0, latestLimit);
 
   const groupedHistory =
     historyMode === "byPdf"
@@ -580,6 +875,42 @@ export default function App() {
             </div>
           </div>
 
+          <section className="history-group">
+            <h3>
+              The PDF Codex
+              <span>{pdfLibrary.length} PDFs</span>
+            </h3>
+
+            {pdfLibrary.length === 0 && (
+              <div className="empty-card">No saved PDFs yet.</div>
+            )}
+
+            {pdfLibrary.map((pdfItem) => (
+              <div className="history-card pdf-codex-card" key={pdfItem.id}>
+                <div>
+                  <p className="page-info">
+                    {pdfItem.totalPages || "?"} pages · Last opened page {" "}
+                    {pdfItem.lastPage || 1}
+                  </p>
+                  <span className="note-label">Saved PDF</span>
+                  <p className="note-body">{pdfItem.fileName}</p>
+                </div>
+
+                <div className="card-actions">
+                  <button onClick={() => openPdfFromLibrary(pdfItem)}>
+                    Open PDF
+                  </button>
+                  <button
+                    className="delete-button"
+                    onClick={() => deletePdfDocument(pdfItem)}
+                  >
+                    Delete PDF
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
+
           <div className="history-list">
             {annotations.length === 0 && (
               <div className="empty-card">No notes yet.</div>
@@ -596,7 +927,7 @@ export default function App() {
                   <div className="history-card" key={annotation.id}>
                     <div>
                       <p className="page-info">
-                        {annotation.pdfName || "Untitled PDF"} · Page{" "}
+                        {annotation.pdfName || "Untitled PDF"} · Page {" "}
                         {annotation.pageNumber}
                       </p>
 
@@ -644,9 +975,22 @@ export default function App() {
                             </span>
                           )}
 
-                          <p className="note-body">
-                            {annotation.note || "No note content."}
-                          </p>
+                          {annotation.noteType === "flashcard" ? (
+                            <div className="flashcard-preview">
+                              <div>
+                                <span>Front</span>
+                                <p>{annotation.cardFront || "Empty front"}</p>
+                              </div>
+                              <div>
+                                <span>Back</span>
+                                <p>{annotation.cardBack || "Empty back"}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="note-body">
+                              {annotation.note || "No note content."}
+                            </p>
+                          )}
 
                           {annotation.extractedText && (
                             <p className="note-body">
@@ -666,9 +1010,7 @@ export default function App() {
                             Save
                           </button>
 
-                          <button onClick={cancelEditAnnotation}>
-                            Cancel
-                          </button>
+                          <button onClick={cancelEditAnnotation}>Cancel</button>
                         </>
                       ) : (
                         <>
@@ -812,10 +1154,6 @@ export default function App() {
 
             {draftRect ? (
               <>
-                <p className="selected-text">
-                  New highlight on Page {currentPage}
-                </p>
-
                 <button
                   type="button"
                   onClick={handleExtractText}
@@ -844,6 +1182,46 @@ export default function App() {
                   </div>
                 )}
 
+                <div className="note-type-switch">
+                  <button
+                    type="button"
+                    className={noteType === "normal" ? "active" : ""}
+                    onClick={() => setNoteType("normal")}
+                  >
+                    Normal Note
+                  </button>
+
+                  <button
+                    type="button"
+                    className={noteType === "flashcard" ? "active" : ""}
+                    onClick={() => setNoteType("flashcard")}
+                  >
+                    Flashcard
+                  </button>
+                </div>
+
+                {noteType === "flashcard" ? (
+                  <div className="flashcard-editor">
+                    <input
+                      className="label-input"
+                      value={cardFront}
+                      onChange={(event) => setCardFront(event.target.value)}
+                      placeholder="Front side, e.g. 능력"
+                    />
+
+                    <textarea
+                      value={cardBack}
+                      onChange={(event) => setCardBack(event.target.value)}
+                      placeholder="Back side, e.g. 能力 / ability"
+                    />
+                  </div>
+                ) : (
+                  <textarea
+                    value={noteText}
+                    onChange={(event) => setNoteText(event.target.value)}
+                    placeholder="Write your note..."
+                  />
+                )}
                 <div className="label-composer">
                   <input
                     className="label-input"
@@ -869,13 +1247,6 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-
-                <textarea
-                  value={noteText}
-                  onChange={(event) => setNoteText(event.target.value)}
-                  placeholder="Write meaning, grammar explanation, translation, or your mistake..."
-                />
-
                 <button onClick={saveAnnotation}>Save Note</button>
               </>
             ) : (
@@ -896,6 +1267,26 @@ export default function App() {
               </button>
             </div>
 
+            <label className="compact-control">
+              See recent 
+              <input
+                type="number"
+                min="1"
+                max={annotations.length || 1}
+                value={latestLimit}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (!value) {
+                    setLatestLimit(1);
+                    return;
+                  }
+
+                  setLatestLimit(Math.max(1, Math.min(value, annotations.length || 1)));
+                }}
+              />
+              records
+            </label>
+
             <div className="notes-list">
               {latestNotes.length === 0 && (
                 <div className="empty-card">No notes yet.</div>
@@ -904,7 +1295,7 @@ export default function App() {
               {latestNotes.map((annotation) => (
                 <div className="note-card" key={annotation.id}>
                   <p className="page-info">
-                    {annotation.pdfName || "Untitled PDF"} · Page{" "}
+                    {annotation.pdfName || "Untitled PDF"} · Page {" "}
                     {annotation.pageNumber}
                   </p>
 
