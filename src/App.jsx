@@ -52,6 +52,7 @@ function dbPdfToAppPdf(item) {
 export default function App() {
   const pageRef = useRef(null);
   const canvasRef = useRef(null);
+  const textLayerRef = useRef(null);
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -68,6 +69,10 @@ export default function App() {
   const [totalPages, setTotalPages] = useState(0);
   const [scale, setScale] = useState(1.35);
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
+
+  const [selectionToolbar, setSelectionToolbar] = useState(null);
+  const [textSelection, setTextSelection] = useState("");
+
 
   const [annotations, setAnnotations] = useState([]);
   const [draftRect, setDraftRect] = useState(null);
@@ -91,6 +96,7 @@ export default function App() {
   const [extractError, setExtractError] = useState("");
 
   const [latestLimit, setLatestLimit] = useState(10);
+  const [flippedFlashcards, setFlippedFlashcards] = useState({});
 
   function resetSelectionState() {
     setDraftRect(null);
@@ -101,6 +107,9 @@ export default function App() {
     setNoteType("normal");
     setCardFront("");
     setCardBack("");
+    setSelectionToolbar(null);
+    setTextSelection("");
+    window.getSelection()?.removeAllRanges();
   }
 
   async function loadAnnotations(currentUser) {
@@ -397,19 +406,24 @@ export default function App() {
   }
 
   async function renderPage(pdf, pageNumber, nextScale = scale) {
-    if (!canvasRef.current || !pageRef.current) return;
+    if (!canvasRef.current || !pageRef.current || !textLayerRef.current) return;
 
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: nextScale });
 
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
+    const textLayer = textLayerRef.current;
 
     canvas.width = viewport.width;
     canvas.height = viewport.height;
 
     pageRef.current.style.width = `${viewport.width}px`;
     pageRef.current.style.height = `${viewport.height}px`;
+
+    textLayer.style.width = `${viewport.width}px`;
+    textLayer.style.height = `${viewport.height}px`;
+    textLayer.innerHTML = "";
 
     setPageSize({
       width: viewport.width,
@@ -420,6 +434,34 @@ export default function App() {
       canvasContext: context,
       viewport,
     }).promise;
+
+    // Build a selectable text layer on top of the canvas.
+    // If the PDF has real text, users can select text directly.
+    // If the PDF is scanned/image-only, this layer will simply stay empty.
+    const textContent = await page.getTextContent();
+
+    textContent.items.forEach((item) => {
+      const transformed = pdfjsLib.Util.transform(
+        viewport.transform,
+        item.transform
+      );
+
+      const x = transformed[4];
+      const y = transformed[5];
+      const fontHeight = Math.abs(transformed[3]) || 10;
+      const textWidth = Math.max(item.width * nextScale, 1);
+
+      const span = document.createElement("span");
+      span.textContent = item.str;
+      span.className = "pdf-text-item";
+      span.style.left = `${x}px`;
+      span.style.top = `${y - fontHeight}px`;
+      span.style.fontSize = `${fontHeight}px`;
+      span.style.height = `${fontHeight * 1.25}px`;
+      span.style.width = `${textWidth}px`;
+
+      textLayer.appendChild(span);
+    });
   }
 
   async function goToPage(pageNumber) {
@@ -464,12 +506,24 @@ export default function App() {
   function handleMouseDown(event) {
     if (!pdfDoc) return;
 
+    if (event.target.closest(".selection-toolbar")) {
+      return;
+    }
+
+    if (event.target.closest(".pdf-text-item")) {
+      setDraftRect(null);
+      setIsDragging(false);
+      return;
+    }
+
     const point = getPoint(event);
 
     setIsDragging(true);
     setStartPoint(point);
     setExtractedText("");
     setExtractError("");
+    setSelectionToolbar(null);
+    setTextSelection("");
 
     setDraftRect({
       x: point.x,
@@ -493,13 +547,69 @@ export default function App() {
   }
 
   function handleMouseUp() {
-    if (!isDragging) return;
+    if (!isDragging) {
+      handleNativeTextSelection();
+      return;
+    }
 
     setIsDragging(false);
 
+    const hasNativeSelection = handleNativeTextSelection();
+
+    if (hasNativeSelection) {
+      setDraftRect(null);
+      return;
+    }
+
     if (!draftRect || draftRect.width < 8 || draftRect.height < 8) {
       setDraftRect(null);
+      setSelectionToolbar(null);
+      return;
     }
+
+    setSelectionToolbar({
+      x: Math.max(8, draftRect.x + draftRect.width - 120),
+      y: Math.max(8, draftRect.y - 44),
+      type: "rect",
+    });
+  }
+
+  function placeToolbarAtRect(rect, pageRect, type, text = "") {
+    const toolbarWidth = 120;
+    const toolbarHeight = 36;
+    const margin = 8;
+
+    const rawX = rect.right - pageRect.left - toolbarWidth;
+    const rawY = rect.top - pageRect.top - toolbarHeight - margin;
+
+    const x = Math.max(margin, Math.min(rawX, pageRect.width - toolbarWidth - margin));
+    const y = Math.max(margin, rawY);
+
+    setSelectionToolbar({
+      x,
+      y,
+      type,
+      text,
+    });
+  }
+
+  function handleNativeTextSelection() {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim();
+
+    if (!selectedText || !selection || selection.rangeCount === 0) {
+      setTextSelection("");
+      return false;
+    }
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const pageRect = pageRef.current.getBoundingClientRect();
+
+    setTextSelection(selectedText);
+    placeToolbarAtRect(rect, pageRect, "native", selectedText);
+
+    return true;
   }
 
   function appendExtractedTextToNote(text) {
@@ -508,10 +618,12 @@ export default function App() {
 
     setExtractedText(cleanText);
 
-    setNoteText((prev) => {
-      if (!prev.trim()) return cleanText;
-      return `${prev}\n\n${cleanText}`;
-    });
+    // In flashcard mode, the extracted word is a good default for the front side.
+    // In normal-note mode, we do not automatically inject extracted text into the note,
+    // so the user stays fully in control of what gets saved.
+    if (noteType === "flashcard" && !cardFront.trim()) {
+      setCardFront(cleanText);
+    }
   }
 
   async function extractTextFromSelection() {
@@ -585,6 +697,20 @@ export default function App() {
     } finally {
       setIsExtracting(false);
     }
+  }
+
+  async function handleFloatingExtractText(event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    if (selectionToolbar?.type === "native" && textSelection.trim()) {
+      appendExtractedTextToNote(textSelection);
+      setSelectionToolbar(null);
+      return;
+    }
+
+    await handleExtractText();
+    setSelectionToolbar(null);
   }
 
   async function copyExtractedText() {
@@ -805,6 +931,13 @@ export default function App() {
   );
 
   const latestNotes = annotations.slice(0, latestLimit);
+
+  function toggleFlashcard(annotationId) {
+    setFlippedFlashcards((prev) => ({
+      ...prev,
+      [annotationId]: !prev[annotationId],
+    }));
+  }
 
   const groupedHistory =
     historyMode === "byPdf"
@@ -1121,6 +1254,7 @@ export default function App() {
                 onMouseLeave={handleMouseUp}
               >
                 <canvas ref={canvasRef} className="pdf-canvas" />
+                <div ref={textLayerRef} className="pdf-text-layer" />
 
                 <div className="highlight-layer">
                   {currentPageAnnotations.map((annotation) => (
@@ -1143,6 +1277,28 @@ export default function App() {
                     />
                   )}
                 </div>
+
+                {selectionToolbar && (
+                  <button
+                    type="button"
+                    className="selection-toolbar"
+                    style={{
+                      left: selectionToolbar.x,
+                      top: selectionToolbar.y,
+                    }}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onMouseUp={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={handleFloatingExtractText}
+                  >
+                    Extract Text
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1154,14 +1310,6 @@ export default function App() {
 
             {draftRect ? (
               <>
-                <button
-                  type="button"
-                  onClick={handleExtractText}
-                  disabled={isExtracting}
-                >
-                  {isExtracting ? "Extracting..." : "Extract Text"}
-                </button>
-
                 {extractError && <p className="error-text">{extractError}</p>}
 
                 {extractedText && (
@@ -1292,24 +1440,54 @@ export default function App() {
                 <div className="empty-card">No notes yet.</div>
               )}
 
-              {latestNotes.map((annotation) => (
-                <div className="note-card" key={annotation.id}>
-                  <p className="page-info">
-                    {annotation.pdfName || "Untitled PDF"} · Page {" "}
-                    {annotation.pageNumber}
-                  </p>
+              {latestNotes.map((annotation) => {
+                const isFlashcard = annotation.noteType === "flashcard";
+                const isFlipped = flippedFlashcards[annotation.id];
 
-                  {annotation.label && (
-                    <span className="note-label">{annotation.label}</span>
-                  )}
+                const displayText = isFlashcard
+                  ? isFlipped
+                    ? annotation.cardBack || "Empty back"
+                    : annotation.cardFront || "Empty front"
+                  : annotation.note || "No note content.";
 
-                  <p>{annotation.note || "No note content."}</p>
+                return (
+                  <div
+                    className={isFlashcard ? "note-card compact-note-card flashcard-clickable" : "note-card compact-note-card"}
+                    key={annotation.id}
+                    onClick={() => {
+                      if (isFlashcard) toggleFlashcard(annotation.id);
+                    }}
+                  >
+                    <p className="page-info compact-page-info">
+                      {annotation.pdfName || "Untitled PDF"} · Page {annotation.pageNumber}
+                    </p>
 
-                  <button onClick={() => jumpToAnnotation(annotation)}>
-                    Go to Source
-                  </button>
-                </div>
-              ))}
+                    {annotation.label && (
+                      <span className="note-label compact-note-label">
+                        {annotation.label}
+                      </span>
+                    )}
+
+                    <p className="compact-note-text">{displayText}</p>
+
+                    {isFlashcard && (
+                      <p className="flashcard-hint">
+                        {isFlipped ? "Back" : "Front"} · Click to flip
+                      </p>
+                    )}
+
+                    <button
+                      className="compact-source-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        jumpToAnnotation(annotation);
+                      }}
+                    >
+                      Go to Source
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </section>
         </aside>
