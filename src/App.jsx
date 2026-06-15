@@ -3,51 +3,14 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker?url";
 import { createWorker } from "tesseract.js";
 import AuthPanel from "./AuthPanel";
+import NoteCard from "./components/NoteCard";
+import HistoryPage from "./components/HistoryPage";
 import { supabase } from "./supabaseClient";
+import { STARTER_LABELS, PDF_BUCKET } from "./lib/constants";
+import { dbAnnotationToAppAnnotation, dbPdfToAppPdf } from "./lib/mappers";
 import "./App.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
-
-const STARTER_LABELS = [
-  "Vocabulary",
-  "Grammar",
-  "Sentence",
-  "Reading Clue",
-  "Mistake",
-  "Question",
-];
-
-const PDF_BUCKET = "pdf-documents";
-
-function dbAnnotationToAppAnnotation(item) {
-  return {
-    id: item.id,
-    pdfName: item.pdf_name,
-    pageNumber: item.page_number,
-    rect: item.rect,
-    label: item.label,
-    note: item.note || "",
-    extractedText: item.extracted_text || "",
-    createdAt: item.created_at,
-    updatedAt: item.updated_at,
-    noteType: item.note_type || "normal",
-    cardFront: item.card_front || "",
-    cardBack: item.card_back || "",
-  };
-}
-
-function dbPdfToAppPdf(item) {
-  return {
-    id: item.id,
-    userId: item.user_id,
-    fileName: item.file_name,
-    storagePath: item.storage_path,
-    lastPage: item.last_page || 1,
-    totalPages: item.total_pages || 0,
-    createdAt: item.created_at,
-    updatedAt: item.updated_at,
-  };
-}
 
 export default function App() {
   const pageRef = useRef(null);
@@ -917,14 +880,6 @@ export default function App() {
     };
   }
 
-  function groupBy(items, keyGetter) {
-    return items.reduce((groups, item) => {
-      const key = keyGetter(item) || "Uncategorized";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(item);
-      return groups;
-    }, {});
-  }
 
   const currentPageAnnotations = annotations.filter(
     (item) => item.pageNumber === currentPage && item.pdfName === pdfName
@@ -939,10 +894,7 @@ export default function App() {
     }));
   }
 
-  const groupedHistory =
-    historyMode === "byPdf"
-      ? groupBy(annotations, (item) => item.pdfName || "Untitled PDF")
-      : groupBy(annotations, (item) => item.label || "Unlabeled");
+
 
   if (authLoading) {
     return (
@@ -959,222 +911,35 @@ export default function App() {
   }
 
   if (view === "history") {
-    return (
-      <div className="app-shell">
-        <header className="topbar">
-          <div className="brand" onClick={() => setView("reader")}>
-            <span className="brand-mark">LT</span>
-            <div>
-              <h1>LinguaTrace</h1>
-              <p>语迹 · Language Learning Notebook</p>
-            </div>
-          </div>
+  return (
+    <HistoryPage
+      annotations={annotations}
+      pdfLibrary={pdfLibrary}
+      historyMode={historyMode}
+      setHistoryMode={setHistoryMode}
+      setView={setView}
+      signOut={signOut}
+      openPdfFromLibrary={openPdfFromLibrary}
+      deletePdfDocument={deletePdfDocument}
+      flippedFlashcards={flippedFlashcards}
+      toggleFlashcard={toggleFlashcard}
+      jumpToAnnotation={jumpToAnnotation}
 
-          <div className="card-actions">
-            <button className="user-button" onClick={() => setView("reader")}>
-              Back to Reader
-            </button>
+      editingId={editingId}
+      editingLabel={editingLabel}
+      setEditingLabel={setEditingLabel}
+      editingNote={editingNote}
+      setEditingNote={setEditingNote}
 
-            <button className="user-button" onClick={signOut}>
-              Sign Out
-            </button>
-          </div>
-        </header>
+      customLabels={customLabels}
 
-        <main className="history-page">
-          <div className="history-header">
-            <div>
-              <h2>Note History</h2>
-              <p className="muted">
-                Review notes by source PDF, label, vocabulary, grammar, or your
-                own custom categories.
-              </p>
-            </div>
-
-            <div className="segmented-control">
-              <button
-                className={historyMode === "byPdf" ? "active" : ""}
-                onClick={() => setHistoryMode("byPdf")}
-              >
-                By PDF
-              </button>
-
-              <button
-                className={historyMode === "byLabel" ? "active" : ""}
-                onClick={() => setHistoryMode("byLabel")}
-              >
-                By Label
-              </button>
-            </div>
-          </div>
-
-          <section className="history-group">
-            <h3>
-              The PDF Codex
-              <span>{pdfLibrary.length} PDFs</span>
-            </h3>
-
-            {pdfLibrary.length === 0 && (
-              <div className="empty-card">No saved PDFs yet.</div>
-            )}
-
-            {pdfLibrary.map((pdfItem) => (
-              <div className="history-card pdf-codex-card" key={pdfItem.id}>
-                <div>
-                  <p className="page-info">
-                    {pdfItem.totalPages || "?"} pages · Last opened page {" "}
-                    {pdfItem.lastPage || 1}
-                  </p>
-                  <span className="note-label">Saved PDF</span>
-                  <p className="note-body">{pdfItem.fileName}</p>
-                </div>
-
-                <div className="card-actions">
-                  <button onClick={() => openPdfFromLibrary(pdfItem)}>
-                    Open PDF
-                  </button>
-                  <button
-                    className="delete-button"
-                    onClick={() => deletePdfDocument(pdfItem)}
-                  >
-                    Delete PDF
-                  </button>
-                </div>
-              </div>
-            ))}
-          </section>
-
-          <div className="history-list">
-            {annotations.length === 0 && (
-              <div className="empty-card">No notes yet.</div>
-            )}
-
-            {Object.entries(groupedHistory).map(([groupName, groupNotes]) => (
-              <section className="history-group" key={groupName}>
-                <h3>
-                  {groupName}
-                  <span>{groupNotes.length} notes</span>
-                </h3>
-
-                {groupNotes.map((annotation) => (
-                  <div className="history-card" key={annotation.id}>
-                    <div>
-                      <p className="page-info">
-                        {annotation.pdfName || "Untitled PDF"} · Page {" "}
-                        {annotation.pageNumber}
-                      </p>
-
-                      {editingId === annotation.id ? (
-                        <>
-                          <input
-                            className="label-input"
-                            value={editingLabel}
-                            onChange={(event) =>
-                              setEditingLabel(event.target.value)
-                            }
-                            placeholder="Edit label"
-                          />
-
-                          <div className="label-suggestions">
-                            {customLabels.map((label) => (
-                              <button
-                                key={label}
-                                type="button"
-                                className={
-                                  editingLabel === label
-                                    ? "label-chip active"
-                                    : "label-chip"
-                                }
-                                onClick={() => setEditingLabel(label)}
-                              >
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-
-                          <textarea
-                            value={editingNote}
-                            onChange={(event) =>
-                              setEditingNote(event.target.value)
-                            }
-                            placeholder="Edit note"
-                          />
-                        </>
-                      ) : (
-                        <>
-                          {annotation.label && (
-                            <span className="note-label">
-                              {annotation.label}
-                            </span>
-                          )}
-
-                          {annotation.noteType === "flashcard" ? (
-                            <div className="flashcard-preview">
-                              <div>
-                                <span>Front</span>
-                                <p>{annotation.cardFront || "Empty front"}</p>
-                              </div>
-                              <div>
-                                <span>Back</span>
-                                <p>{annotation.cardBack || "Empty back"}</p>
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="note-body">
-                              {annotation.note || "No note content."}
-                            </p>
-                          )}
-
-                          {annotation.extractedText && (
-                            <p className="note-body">
-                              {annotation.extractedText}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </div>
-
-                    <div className="card-actions">
-                      {editingId === annotation.id ? (
-                        <>
-                          <button
-                            onClick={() => saveEditedAnnotation(annotation.id)}
-                          >
-                            Save
-                          </button>
-
-                          <button onClick={cancelEditAnnotation}>Cancel</button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => jumpToAnnotation(annotation)}>
-                            Open Source
-                          </button>
-
-                          <button
-                            onClick={() => startEditAnnotation(annotation)}
-                          >
-                            Modify
-                          </button>
-
-                          <button
-                            className="delete-button"
-                            onClick={() => deleteAnnotation(annotation.id)}
-                          >
-                            Delete
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </section>
-            ))}
-          </div>
-        </main>
-      </div>
-    );
-  }
+      saveEditedAnnotation={saveEditedAnnotation}
+      cancelEditAnnotation={cancelEditAnnotation}
+      startEditAnnotation={startEditAnnotation}
+      deleteAnnotation={deleteAnnotation}
+    />
+  );
+}
 
   return (
     <div className="app-shell">
@@ -1440,54 +1205,15 @@ export default function App() {
                 <div className="empty-card">No notes yet.</div>
               )}
 
-              {latestNotes.map((annotation) => {
-                const isFlashcard = annotation.noteType === "flashcard";
-                const isFlipped = flippedFlashcards[annotation.id];
-
-                const displayText = isFlashcard
-                  ? isFlipped
-                    ? annotation.cardBack || "Empty back"
-                    : annotation.cardFront || "Empty front"
-                  : annotation.note || "No note content.";
-
-                return (
-                  <div
-                    className={isFlashcard ? "note-card compact-note-card flashcard-clickable" : "note-card compact-note-card"}
-                    key={annotation.id}
-                    onClick={() => {
-                      if (isFlashcard) toggleFlashcard(annotation.id);
-                    }}
-                  >
-                    <p className="page-info compact-page-info">
-                      {annotation.pdfName || "Untitled PDF"} · Page {annotation.pageNumber}
-                    </p>
-
-                    {annotation.label && (
-                      <span className="note-label compact-note-label">
-                        {annotation.label}
-                      </span>
-                    )}
-
-                    <p className="compact-note-text">{displayText}</p>
-
-                    {isFlashcard && (
-                      <p className="flashcard-hint">
-                        {isFlipped ? "Back" : "Front"} · Click to flip
-                      </p>
-                    )}
-
-                    <button
-                      className="compact-source-button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        jumpToAnnotation(annotation);
-                      }}
-                    >
-                      Go to Source
-                    </button>
-                  </div>
-                );
-              })}
+              {latestNotes.map((annotation) => (
+                <NoteCard
+                  key={annotation.id}
+                  annotation={annotation}
+                  flippedFlashcards={flippedFlashcards}
+                  toggleFlashcard={toggleFlashcard}
+                  jumpToAnnotation={jumpToAnnotation}
+                />
+              ))}
             </div>
           </section>
         </aside>
