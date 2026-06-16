@@ -4,6 +4,7 @@ import { groupBy } from "../lib/groupBy";
 export default function HistoryPage({
   annotations,
   pdfLibrary,
+  labelColors,
   historyMode,
   setHistoryMode,
   setView,
@@ -44,15 +45,19 @@ export default function HistoryPage({
           </div>
         </div>
 
-        <div className="card-actions">
-          <button className="user-button" onClick={() => setView("reader")}>
-            Back to Reader
+        <nav className="topnav" aria-label="Main navigation">
+          <button className="nav-link" onClick={() => setView("settings")}>
+            Settings
           </button>
 
-          <button className="user-button" onClick={signOut}>
+          <button className="nav-link active" onClick={() => setView("history")}>
+            Note History
+          </button>
+
+          <button className="nav-link signout-link" onClick={signOut}>
             Sign Out
           </button>
-        </div>
+        </nav>
       </header>
 
       <main className="history-page">
@@ -154,6 +159,7 @@ export default function HistoryPage({
                               className={
                                 editingLabel === label ? "label-chip active" : "label-chip"
                               }
+                              style={{ "--label-color": labelColors[label] || "#64748b" }}
                               onClick={() => setEditingLabel(label)}
                             >
                               {label}
@@ -185,6 +191,7 @@ export default function HistoryPage({
                       flippedFlashcards={flippedFlashcards}
                       toggleFlashcard={toggleFlashcard}
                       jumpToAnnotation={jumpToAnnotation}
+                      labelColors={labelColors}
                     />
                   )
                 )}

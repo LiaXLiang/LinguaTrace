@@ -5,10 +5,12 @@ import { createWorker } from "tesseract.js";
 import AuthPanel from "./AuthPanel";
 import NoteCard from "./components/NoteCard";
 import HistoryPage from "./components/HistoryPage";
+import SettingsPanel from "./components/SettingsPanel";
 import { supabase } from "./supabaseClient";
 import { STARTER_LABELS, PDF_BUCKET } from "./lib/constants";
 import { dbAnnotationToAppAnnotation, dbPdfToAppPdf } from "./lib/mappers";
 import "./App.css";
+
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -61,6 +63,37 @@ export default function App() {
   const [latestLimit, setLatestLimit] = useState(10);
   const [flippedFlashcards, setFlippedFlashcards] = useState({});
 
+
+  const LABEL_COLOR_PALETTE = [
+    "#3b82f6",
+    "#8b5cf6",
+    "#22c55e",
+    "#f97316",
+    "#ef4444",
+    "#14b8a6",
+    "#ec4899",
+    "#eab308",
+    "#06b6d4",
+    "#64748b",
+  ];
+
+    
+  const [labelColors, setLabelColors] = useState(() => {
+    const saved = localStorage.getItem("linguatrace-label-colors");
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  function getDefaultLabelColor(label) {
+    let hash = 0;
+
+    for (let i = 0; i < label.length; i += 1) {
+      hash = label.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    const index = Math.abs(hash) % LABEL_COLOR_PALETTE.length;
+    return LABEL_COLOR_PALETTE[index];
+  }
+  
   function resetSelectionState() {
     setDraftRect(null);
     setLabelText("");
@@ -203,6 +236,34 @@ export default function App() {
       await openPdfFromLibrary(library[0], library[0].lastPage || 1);
     }
   }
+
+  useEffect(() => {
+    setLabelColors((prev) => {
+      const next = { ...prev };
+      let changed = false;
+
+      customLabels.forEach((label) => {
+        if (!next[label]) {
+          next[label] = getDefaultLabelColor(label);
+          changed = true;
+        }
+      });
+
+      if (!next.Unlabeled) {
+        next.Unlabeled = getDefaultLabelColor("Unlabeled");
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [customLabels]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "linguatrace-label-colors",
+      JSON.stringify(labelColors)
+    );
+  }, [labelColors]);
 
   useEffect(() => {
     async function loadUser() {
@@ -729,6 +790,12 @@ export default function App() {
   }
 
   async function deleteAnnotation(id) {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this note? This action cannot be undone."
+    );
+
+    if (!confirmed) return;
+
     const { error } = await supabase.from("annotations").delete().eq("id", id);
 
     if (error) {
@@ -737,6 +804,7 @@ export default function App() {
     }
 
     setAnnotations((prev) => prev.filter((item) => item.id !== id));
+    setStatus("Note deleted.");
   }
 
   function startEditAnnotation(annotation) {
@@ -924,6 +992,7 @@ export default function App() {
       flippedFlashcards={flippedFlashcards}
       toggleFlashcard={toggleFlashcard}
       jumpToAnnotation={jumpToAnnotation}
+      labelColors={labelColors}
 
       editingId={editingId}
       editingLabel={editingLabel}
@@ -941,10 +1010,22 @@ export default function App() {
   );
 }
 
+  if (view === "settings") {
+    return (
+      <SettingsPanel
+        customLabels={customLabels}
+        labelColors={labelColors}
+        setLabelColors={setLabelColors}
+        setView={setView}
+        signOut={signOut}
+      />
+    );
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand">
+        <div className="brand" onClick={() => setView("reader")}>
           <span className="brand-mark">LT</span>
           <div>
             <h1>LinguaTrace</h1>
@@ -952,15 +1033,19 @@ export default function App() {
           </div>
         </div>
 
-        <div className="card-actions">
-          <button className="user-button" onClick={() => setView("history")}>
-            User Info / Note History
+        <nav className="topnav" aria-label="Main navigation">
+          <button className="nav-link" onClick={() => setView("settings")}>
+            Settings
           </button>
 
-          <button className="user-button" onClick={signOut}>
+          <button className="nav-link" onClick={() => setView("history")}>
+            Note History
+          </button>
+
+          <button className="nav-link signout-link" onClick={signOut}>
             Sign Out
           </button>
-        </div>
+        </nav>
       </header>
 
       <main className="workspace">
@@ -1153,6 +1238,7 @@ export default function App() {
                             ? "label-chip active"
                             : "label-chip"
                         }
+                        style={{ "--label-color": labelColors[label] || "#64748b" }}
                         onClick={() => setLabelText(label)}
                       >
                         {label}
@@ -1209,9 +1295,11 @@ export default function App() {
                 <NoteCard
                   key={annotation.id}
                   annotation={annotation}
+                  onDelete={deleteAnnotation}
                   flippedFlashcards={flippedFlashcards}
                   toggleFlashcard={toggleFlashcard}
                   jumpToAnnotation={jumpToAnnotation}
+                  labelColors={labelColors}
                 />
               ))}
             </div>

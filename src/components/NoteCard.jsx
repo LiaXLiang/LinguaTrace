@@ -9,9 +9,14 @@ export default function NoteCard({
   flippedFlashcards,
   toggleFlashcard,
   jumpToAnnotation,
+
+  labelColors = {},
 }) {
   const isFlashcard = annotation.noteType === "flashcard";
   const isFlipped = flippedFlashcards[annotation.id];
+
+  const label = annotation.label || "Unlabeled";
+  const labelColor = labelColors[label] || "#64748b";
 
   const displayText = isFlashcard
     ? isFlipped
@@ -30,39 +35,53 @@ export default function NoteCard({
         if (isFlashcard) toggleFlashcard(annotation.id);
       }}
     >
-      <p className="page-info compact-page-info">
-        {annotation.pdfName || "Untitled PDF"} · Page {annotation.pageNumber}
-      </p>
-
-      {annotation.label && (
-        <span className="note-label compact-note-label">
-          {annotation.label}
+      <div className="note-card-top-row">
+        <span
+          className="note-label compact-note-label"
+          style={{ "--label-color": labelColor }}
+        >
+          {label}
         </span>
-      )}
+
+        {onDelete && (
+          <button
+            className="note-card-delete-x"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(annotation.id);
+            }}
+            aria-label="Delete note"
+            title="Delete note"
+          >
+            ×
+          </button>
+        )}
+      </div>
 
       <p className="compact-note-text">{displayText}</p>
 
-      {isFlashcard && (
-        <p className="flashcard-hint">
-          {isFlipped ? "Back" : "Front"} · Click to flip
-        </p>
-      )}
+      <div className="note-card-footer">
+        <span className="note-card-meta">
+          Page {annotation.pageNumber}
+          {isFlashcard && ` · ${isFlipped ? "Back" : "Front"}`}
+        </span>
 
-      <div className="note-card-actions">
-        <button
-          className="compact-source-button"
-          onClick={(event) => {
-            event.stopPropagation();
-            jumpToAnnotation(annotation);
-          }}
-        >
-          Go to Source
-        </button>
+        <div className="note-card-inline-actions">
+          <button
+            type="button"
+            className="note-action-link source-action"
+            onClick={(event) => {
+              event.stopPropagation();
+              jumpToAnnotation(annotation);
+            }}
+          >
+            Source
+          </button>
 
-        {showManageActions && (
-          <>
+          {showManageActions && (
             <button
-              className="compact-secondary-button"
+              type="button"
+              className="note-action-link modify-action"
               onClick={(event) => {
                 event.stopPropagation();
                 onEdit(annotation);
@@ -70,18 +89,8 @@ export default function NoteCard({
             >
               Modify
             </button>
-
-            <button
-              className="compact-delete-button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete(annotation.id);
-              }}
-            >
-              Delete
-            </button>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
