@@ -138,8 +138,8 @@ export default function HistoryPage({
               <div className="notes-list history-notes-grid">
                 {groupNotes.map((annotation) =>
                   editingId === annotation.id ? (
-                    <div className="history-card" key={annotation.id}>
-                      <div>
+                    <div className="history-card history-edit-card" key={annotation.id}>
+                      <div className="history-edit-form">
                         <p className="page-info">
                           {annotation.pdfName || "Untitled PDF"} · Page {annotation.pageNumber}
                         </p>
@@ -174,11 +174,11 @@ export default function HistoryPage({
                         />
                       </div>
 
-                      <div className="card-actions">
-                        <button onClick={() => saveEditedAnnotation(annotation.id)}>
+                      <div className="history-edit-actions">
+                        <button type="button" onClick={() => saveEditedAnnotation(annotation.id)}>
                           Save
                         </button>
-                        <button onClick={cancelEditAnnotation}>Cancel</button>
+                        <button type="button" className="user-button" onClick={cancelEditAnnotation}>Cancel</button>
                       </div>
                     </div>
                   ) : (
