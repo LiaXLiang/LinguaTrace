@@ -6,6 +6,7 @@ import AuthPanel from "./AuthPanel";
 import NoteCard from "./components/NoteCard";
 import HistoryPage from "./components/HistoryPage";
 import SettingsPanel from "./components/SettingsPanel";
+import CatAgentChat from "./components/CatAgentChat";
 import { supabase } from "./supabaseClient";
 import { STARTER_LABELS, PDF_BUCKET } from "./lib/constants";
 import { dbAnnotationToAppAnnotation, dbPdfToAppPdf } from "./lib/mappers";
@@ -67,6 +68,7 @@ export default function App() {
   const [latestLimit, setLatestLimit] = useState(2);
   const [flippedFlashcards, setFlippedFlashcards] = useState({});
 
+  const [agentOpen, setAgentOpen] = useState(false);
 
   const LABEL_COLOR_PALETTE = [
     "#3b82f6",
@@ -685,8 +687,8 @@ export default function App() {
 
     setDraftRect(boundingRect);
 
-    // 但仍然显示一个浮动按钮，只是文字变成 Add Note
-    placeToolbarAtRect(rect, pageRect, "native", selectedText);
+    // 不显示浮动按钮
+    setSelectionToolbar(null);
 
     return true;
   }
@@ -1263,19 +1265,36 @@ export default function App() {
 
                 {extractedText && (
                   <div className="ocr-result-card">
-                    <div className="section-title-row">
+                    <div className="ocr-header-row">
                       <h3>Extracted Text</h3>
 
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={copyExtractedText}
-                      >
-                        Copy
-                      </button>
+                      <div className="ocr-actions">
+                        <button
+                          type="button"
+                          className="ask-ai-button"
+                          onClick={() => setAgentOpen(true)}
+                        >
+                          Ask AI
+                        </button>
+
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={copyExtractedText}
+                          aria-label="Copy extracted text"
+                          title="Copy"
+                        >
+                          ⧉
+                        </button>
+                      </div>
                     </div>
 
-                    <p>{extractedText}</p>
+                    <textarea
+                      className="extracted-text-editor"
+                      value={extractedText}
+                      onChange={(event) => setExtractedText(event.target.value)}
+                      placeholder="Edit extracted text..."
+                    />
                   </div>
                 )}
 
@@ -1405,6 +1424,11 @@ export default function App() {
           </section>
         </aside>
       </main>
+      <CatAgentChat
+        open={agentOpen}
+        onClose={() => setAgentOpen(false)}
+        extractedText={extractedText}
+      />
     </div>
   );
 }

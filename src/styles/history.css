@@ -147,3 +147,98 @@
   background: linear-gradient(135deg, var(--blue), var(--violet));
   color: white;
 }
+
+
+.history-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+
+.history-subgroup {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
+  padding: 18px;
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.06), transparent 48%),
+    rgba(2, 6, 23, 0.28);
+}
+
+.history-subgroup + .history-subgroup {
+  margin-top: 18px;
+}
+
+.history-subgroup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.history-subgroup h4,
+.history-subgroup-header h4 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 850;
+}
+
+.history-subgroup-header span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.history-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 18px;
+}
+
+.history-group-action-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.saved-pdf-page {
+  margin-top: 18px;
+}
+
+.saved-pdf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pdf-row-card {
+  min-height: auto;
+  padding: 14px 18px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.pdf-row-card .page-info {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.pdf-row-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.pdf-row-card .card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pdf-row-card .card-actions button {
+  min-width: 118px;
+}
