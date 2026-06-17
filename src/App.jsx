@@ -1271,10 +1271,12 @@ export default function App() {
                       <div className="ocr-actions">
                         <button
                           type="button"
-                          className="ask-ai-button"
+                          className="ask-ai-button fancy-ai-button"
                           onClick={() => setAgentOpen(true)}
                         >
-                          Ask AI
+                          <span className="ai-bot-icon">🤖</span>
+                          <span>Ask AI</span>
+                          <span className="ai-sparkle">✦</span>
                         </button>
 
                         <button

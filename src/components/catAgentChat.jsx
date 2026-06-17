@@ -4,7 +4,7 @@ export default function CatAgentChat({ open, onClose, extractedText }) {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "喵～我可以帮你解释这段文字、生成例句、翻译或做成闪卡。",
+      content: "Meow～我可以帮你解释这段文字、生成例句、翻译或做成闪卡。",
     },
   ]);
 
@@ -31,7 +31,8 @@ export default function CatAgentChat({ open, onClose, extractedText }) {
     <div className="cat-agent-panel">
     
         <div className="cat-agent-avatar">
-            <img src="/cat-avatar.png" alt="Cat Assistant" />
+            <img src={`${import.meta.env.BASE_URL}cat-avatar.png`}
+            alt="Cat Assistant" />
         </div>
 
         <div className="cat-agent-header">
