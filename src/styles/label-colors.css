@@ -1,0 +1,22 @@
+/* -------------------------------------------------------
+   Real label-color linkage across editor, latest notes,
+   history cards, and settings page
+------------------------------------------------------- */
+.note-label,
+.compact-note-label,
+.settings-label-preview {
+  background: color-mix(in srgb, var(--label-color, #64748b) 88%, white 12%);
+  color: white;
+  border: 1px solid color-mix(in srgb, var(--label-color, #64748b) 80%, white 20%);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--label-color, #64748b) 26%, transparent);
+}
+
+.label-chip {
+  border-color: color-mix(in srgb, var(--label-color, #64748b) 45%, rgba(148, 163, 184, 0.22));
+}
+
+.label-chip.active {
+  background: color-mix(in srgb, var(--label-color, #64748b) 88%, white 12%);
+  color: white;
+  border-color: color-mix(in srgb, var(--label-color, #64748b) 70%, white 30%);
+}

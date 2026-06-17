@@ -1,0 +1,149 @@
+/* Saved PDF compact row */
+.pdf-codex-card {
+  min-height: auto;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.pdf-codex-card .note-body {
+  margin: 0;
+}
+
+.pdf-codex-card .page-info,
+.pdf-codex-card .note-label {
+  margin: 0 0 4px;
+}
+
+/* History page */
+.history-page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 30px;
+}
+
+.history-header,
+.history-card,
+.history-group h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.history-page h2 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: -0.04em;
+  background: linear-gradient(90deg, #fff, #bae6fd, #ddd6fe);
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.history-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-group {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 20px;
+  padding: 16px;
+  background:
+    linear-gradient(135deg, rgba(139, 92, 246, 0.08), transparent 55%),
+    rgba(2, 6, 23, 0.38);
+}
+
+.history-group h3 {
+  margin: 0 0 14px;
+  align-items: center;
+  font-size: 18px;
+}
+
+.history-group h3 span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.history-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 18px;
+}
+
+/* History edit mode: keep Save / Cancel inside the editing card */
+.history-edit-card {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 14px;
+  min-width: 0;
+  overflow: visible;
+}
+
+.history-edit-form {
+  width: 100%;
+  min-width: 0;
+}
+
+.history-edit-card textarea {
+  width: 100%;
+  min-height: 130px;
+  margin-top: 12px;
+  padding: 12px 13px;
+  border-radius: 15px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(2, 6, 23, 0.72);
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+}
+
+.history-edit-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.history-edit-actions button {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .history-edit-card {
+    grid-column: span 1;
+  }
+}
+
+.muted {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Segmented control */
+.segmented-control {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 17px;
+  background: rgba(2, 6, 23, 0.48);
+}
+
+.segmented-control button {
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  box-shadow: none;
+}
+
+.segmented-control button.active {
+  background: linear-gradient(135deg, var(--blue), var(--violet));
+  color: white;
+}

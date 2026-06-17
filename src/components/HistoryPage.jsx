@@ -50,6 +50,10 @@ export default function HistoryPage({
             Settings
           </button>
 
+          <button className="nav-link" onClick={() => setView("reader")}>
+            Reader
+          </button>
+
           <button className="nav-link active" onClick={() => setView("history")}>
             Note History
           </button>

@@ -1,0 +1,261 @@
+/* Notes */
+.notes-list {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.note-card,
+.history-card {
+  padding: 15px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 50%),
+    rgba(2, 6, 23, 0.42);
+}
+
+.page-info {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.note-label {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 8px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--blue), var(--violet));
+  color: white;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.note-body {
+  color: var(--text);
+  line-height: 1.55;
+  margin: 8px 0 0;
+}
+
+.delete-button {
+  background: linear-gradient(135deg, var(--danger), #be123c);
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.note-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+/* Compact note cards */
+.compact-note-card {
+  position: relative;
+  min-height: 180px;
+  padding: 26px 28px 22px;
+  border-radius: 24px;
+  text-align: left;
+  background:
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.12), transparent 36%),
+    rgba(7, 13, 31, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: 0.18s ease;
+}
+
+.compact-note-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(129, 140, 248, 0.42);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(129, 140, 248, 0.08);
+}
+
+.compact-page-info {
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.compact-note-label {
+  display: inline-block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.compact-note-text {
+  margin: 30px 0 28px;
+  font-size: 26px;
+  line-height: 1.35;
+  color: rgba(248, 250, 252, 0.96);
+  word-break: break-word;
+}
+
+.flashcard-clickable {
+  cursor: pointer;
+}
+
+.flashcard-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+
+.compact-source-button,
+.compact-secondary-button,
+.compact-delete-button {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: 12px;
+}
+
+.compact-source-button {
+  margin-top: 10px;
+}
+
+.compact-delete-button {
+  background: #dc2626;
+  color: white;
+}
+
+.compact-delete-button:hover {
+  background: #b91c1c;
+}
+
+.note-card-delete-x {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 3;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ff7373;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.note-card-delete-x:hover {
+  background: rgba(239, 68, 68, 0.95);
+  color: white;
+}
+
+.note-card-top-row {
+  display: flex;
+  align-items: flex-start;
+  padding-right: 48px;
+  min-width: 0;
+}
+
+.note-card-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.note-card-meta {
+  color: rgba(148, 163, 184, 0.82);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.note-card-inline-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+}
+
+.note-card-inline-actions .note-action-link {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(129, 140, 248, 0.38);
+  background: rgba(15, 23, 42, 0.72);
+  color: #bfdbfe;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 22px rgba(15, 23, 42, 0.28);
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease;
+}
+
+.note-card-inline-actions .note-action-link:hover {
+  transform: translateY(-1px);
+  color: white;
+  text-decoration: none;
+  border-color: rgba(129, 140, 248, 0.75);
+  background: rgba(99, 102, 241, 0.2);
+  box-shadow:
+    0 0 18px rgba(99, 102, 241, 0.18),
+    0 10px 26px rgba(0, 0, 0, 0.22);
+}
+
+.note-card-inline-actions .source-action:hover {
+  background: rgba(59, 130, 246, 0.22);
+}
+
+.note-card-inline-actions .modify-action:hover {
+  background: rgba(139, 92, 246, 0.24);
+}
+
+/* Latest Notes card overrides */
+.latest-card .compact-note-card {
+  padding: 26px 20px 22px;
+}
+
+.latest-card .note-card-top-row {
+  padding-right: 54px;
+}
+
+.latest-card .compact-note-label {
+  max-width: 118px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.latest-card .note-card-delete-x {
+  width: 32px;
+  height: 32px;
+  top: 22px;
+  right: 20px;
+  font-size: 24px;
+}

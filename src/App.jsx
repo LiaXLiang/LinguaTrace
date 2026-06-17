@@ -18,6 +18,7 @@ export default function App() {
   const pageRef = useRef(null);
   const canvasRef = useRef(null);
   const textLayerRef = useRef(null);
+  const renderTaskRef = useRef(null);
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -60,7 +61,7 @@ export default function App() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
 
-  const [latestLimit, setLatestLimit] = useState(10);
+  const [latestLimit, setLatestLimit] = useState(2);
   const [flippedFlashcards, setFlippedFlashcards] = useState({});
 
 
@@ -179,8 +180,6 @@ export default function App() {
       setCurrentPage(safePage);
       setView("reader");
       setStatus(`Loaded: ${pdfItem.fileName}`);
-
-      await renderPage(pdf, safePage, scale);
 
       await supabase
         .from("pdf_documents")
@@ -309,10 +308,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (view === "reader" && pdfDoc && canvasRef.current && pageRef.current) {
-      renderPage(pdfDoc, currentPage, scale);
-    }
-  }, [view]);
+    if (view !== "reader") return;
+    if (!pdfDoc) return;
+
+    let cancelled = false;
+
+    const timer = requestAnimationFrame(() => {
+      if (cancelled) return;
+
+      if (canvasRef.current && pageRef.current && textLayerRef.current) {
+        renderPage(pdfDoc, currentPage, scale);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(timer);
+    };
+  }, [view, pdfDoc, currentPage, scale]);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -390,7 +403,6 @@ export default function App() {
       setView("reader");
       setStatus(`Loaded and saved: ${file.name}`);
 
-      await renderPage(pdf, 1, scale);
     } catch {
       setStatus("Failed to load PDF.");
     } finally {
@@ -454,10 +466,28 @@ export default function App() {
       height: viewport.height,
     });
 
-    await page.render({
+    if (renderTaskRef.current) {
+      renderTaskRef.current.cancel();
+    }
+
+    const renderTask = page.render({
       canvasContext: context,
       viewport,
-    }).promise;
+    });
+
+    renderTaskRef.current = renderTask;
+
+    try {
+      await renderTask.promise;
+    } catch (error) {
+      if (error?.name !== "RenderingCancelledException") {
+        throw error;
+      }
+    } finally {
+      if (renderTaskRef.current === renderTask) {
+        renderTaskRef.current = null;
+      }
+    }
 
     // Build a selectable text layer on top of the canvas.
     // If the PDF has real text, users can select text directly.
@@ -626,12 +656,12 @@ export default function App() {
       return false;
     }
 
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    const pageRect = pageRef.current.getBoundingClientRect();
-
     setTextSelection(selectedText);
-    placeToolbarAtRect(rect, pageRect, "native", selectedText);
+    setExtractedText(selectedText);
+
+    // Native text selection 不需要矩形框
+    setDraftRect(null);
+    setSelectionToolbar(null);
 
     return true;
   }
@@ -729,6 +759,7 @@ export default function App() {
 
     if (selectionToolbar?.type === "native" && textSelection.trim()) {
       appendExtractedTextToNote(textSelection);
+      setExtractedText(textSelection);
       setSelectionToolbar(null);
       return;
     }
@@ -743,16 +774,19 @@ export default function App() {
   }
 
   async function saveAnnotation() {
-    if (!user || !draftRect || !pageSize.width || !pageSize.height) return;
+    if (!user) return;
+    if (!draftRect && !textSelection.trim()) return;
 
     const finalLabel = labelText.trim() || "Unlabeled";
 
-    const normalizedRect = {
-      x: draftRect.x / pageSize.width,
-      y: draftRect.y / pageSize.height,
-      width: draftRect.width / pageSize.width,
-      height: draftRect.height / pageSize.height,
-    };
+    const normalizedRect = draftRect && pageSize.width && pageSize.height
+      ? {
+          x: draftRect.x / pageSize.width,
+          y: draftRect.y / pageSize.height,
+          width: draftRect.width / pageSize.width,
+          height: draftRect.height / pageSize.height,
+        }
+      : null;
 
     const { data, error } = await supabase
       .from("annotations")
@@ -763,7 +797,7 @@ export default function App() {
         rect: normalizedRect,
         label: finalLabel,
         note: noteText.trim(),
-        extracted_text: "",
+        extracted_text: extractedText || textSelection || "",
         note_type: noteType,
         card_front: noteType === "flashcard" ? cardFront.trim() : "",
         card_back: noteType === "flashcard" ? cardBack.trim() : "",
@@ -953,7 +987,9 @@ export default function App() {
     (item) => item.pageNumber === currentPage && item.pdfName === pdfName
   );
 
-  const latestNotes = annotations.slice(0, latestLimit);
+  const latestNotes = [...annotations]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, latestLimit);
 
   function toggleFlashcard(annotationId) {
     setFlippedFlashcards((prev) => ({
@@ -1036,6 +1072,10 @@ export default function App() {
         <nav className="topnav" aria-label="Main navigation">
           <button className="nav-link" onClick={() => setView("settings")}>
             Settings
+          </button>
+
+          <button className="nav-link" onClick={() => setView("reader")}>
+            Reader
           </button>
 
           <button className="nav-link" onClick={() => setView("history")}>

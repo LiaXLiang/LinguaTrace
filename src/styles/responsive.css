@@ -1,0 +1,80 @@
+/* Responsive */
+@media (max-width: 1280px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+
+  .pdf-area {
+    min-height: 620px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .app-shell {
+    padding: 14px;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .pdf-area {
+    height: 70vh;
+    min-height: 520px;
+  }
+
+  .viewer-header,
+  .history-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .toolbar {
+    justify-content: flex-start;
+  }
+
+  .history-card {
+    flex-direction: column;
+  }
+
+  .card-actions {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 10px;
+  }
+
+  .brand h1 {
+    font-size: 21px;
+  }
+
+  .brand p {
+    font-size: 12px;
+  }
+
+  .upload-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .viewer-card,
+  .note-editor-card,
+  .latest-card,
+  .history-page {
+    border-radius: 18px;
+    padding: 16px;
+  }
+
+  .pdf-area {
+    padding: 10px;
+  }
+}

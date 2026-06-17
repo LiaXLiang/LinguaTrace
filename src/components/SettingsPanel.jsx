@@ -1,15 +1,4 @@
-const LABEL_COLOR_OPTIONS = [
-  "#3b82f6",
-  "#8b5cf6",
-  "#22c55e",
-  "#f97316",
-  "#ef4444",
-  "#14b8a6",
-  "#ec4899",
-  "#eab308",
-  "#06b6d4",
-  "#64748b",
-];
+import { useState } from "react";
 
 export default function SettingsPanel({
   customLabels,
@@ -18,6 +7,8 @@ export default function SettingsPanel({
   setView,
   signOut,
 }) {
+  const [activeLabel, setActiveLabel] = useState(null);
+
   function updateLabelColor(label, color) {
     setLabelColors((prev) => ({
       ...prev,
@@ -37,75 +28,73 @@ export default function SettingsPanel({
         </div>
 
         <nav className="topnav" aria-label="Main navigation">
-          <button className="nav-link active" onClick={() => setView("settings")}>
+          <button
+            type="button"
+            className="nav-link active"
+            onClick={() => setView("settings")}
+          >
             Settings
           </button>
 
-          <button className="nav-link" onClick={() => setView("history")}>
+         <button className="nav-link" onClick={() => setView("reader")}>
+             Reader
+         </button>
+
+          <button
+            type="button"
+            className="nav-link"
+            onClick={() => setView("history")}
+          >
             Note History
           </button>
 
-          <button className="nav-link signout-link" onClick={signOut}>
+          <button
+            type="button"
+            className="nav-link signout-link"
+            onClick={signOut}
+          >
             Sign Out
           </button>
         </nav>
       </header>
 
-      <main className="settings-page">
-        <div className="settings-page-header">
-          <div>
-            <h2>Settings</h2>
-            <p className="muted">
-              Customize the colors of your own labels. Changes are applied
-              immediately to Latest Notes and Note History.
-            </p>
-          </div>
-
-          <button className="ghost-button" onClick={() => setView("reader")}>
-            Back to Reader
-          </button>
+      <main className="settings-page compact-settings-page">
+        <div className="settings-page-header compact-settings-header">
+          <h2>Settings</h2>
+          <p>Click a label to change its color.</p>
         </div>
 
-        <section className="settings-section">
+        <section className="settings-card compact-settings-card">
           <h3>Label Colors</h3>
 
-          <div className="label-color-list">
+          <div className="settings-label-cloud">
             {customLabels.map((label) => {
-              const currentColor = labelColors[label] || "#64748b";
+              const color = labelColors[label] || "#64748b";
 
               return (
-                <div className="label-color-row" key={label}>
-                  <span
-                    className="settings-label-preview"
-                    style={{ "--label-color": currentColor }}
+                <div className="settings-label-wrapper" key={label}>
+                  <button
+                    type="button"
+                    className={
+                      activeLabel === label
+                        ? "settings-label-pill active"
+                        : "settings-label-pill"
+                    }
+                    style={{ "--label-color": color }}
+                    onClick={() => setActiveLabel(label)}
                   >
                     {label}
-                  </span>
+                  </button>
 
-                  <div className="label-color-options">
-                    {LABEL_COLOR_OPTIONS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className={
-                          currentColor.toLowerCase() === color.toLowerCase()
-                            ? "label-color-dot active"
-                            : "label-color-dot"
-                        }
-                        style={{ backgroundColor: color }}
-                        onClick={() => updateLabelColor(label, color)}
-                        aria-label={`Set ${label} color`}
-                      />
-                    ))}
-
-                    <input
-                      className="label-custom-color-input"
-                      type="color"
-                      value={currentColor}
-                      onChange={(event) => updateLabelColor(label, event.target.value)}
-                      aria-label={`Choose custom color for ${label}`}
-                    />
-                  </div>
+                  <input
+                    className="label-native-color-input"
+                    type="color"
+                    value={color}
+                    onChange={(event) =>
+                      updateLabelColor(label, event.target.value)
+                    }
+                    onClick={() => setActiveLabel(label)}
+                  />
                 </div>
               );
             })}
