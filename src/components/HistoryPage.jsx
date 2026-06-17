@@ -21,6 +21,10 @@ export default function HistoryPage({
   setEditingLabel,
   editingNote,
   setEditingNote,
+  editingCardFront,
+  setEditingCardFront,
+  editingCardBack,
+  setEditingCardBack,
 
   customLabels,
 
@@ -171,13 +175,37 @@ export default function HistoryPage({
                           ))}
                         </div>
 
-                        <textarea
-                          value={editingNote}
-                          onChange={(event) => setEditingNote(event.target.value)}
-                          placeholder="Edit note"
-                        />
-                      </div>
+                        {annotation.noteType === "flashcard" ? (
+                          <>
+                            <input
+                              className="label-input"
+                              value={editingCardFront}
+                              onChange={(event) =>
+                                setEditingCardFront(event.target.value)
+                              }
+                              placeholder="Edit front side"
+                            />
 
+                            <textarea
+                              value={editingCardBack}
+                              onChange={(event) =>
+                                setEditingCardBack(event.target.value)
+                              }
+                              placeholder="Edit back side"
+                            />
+                          </>
+                        ) : (
+                          <textarea
+                            value={editingNote}
+                            onChange={(event) =>
+                              setEditingNote(event.target.value)
+                            }
+                            placeholder="Edit note"
+                          />
+                        )}
+                      
+                      </div>
+                      
                       <div className="history-edit-actions">
                         <button type="button" onClick={() => saveEditedAnnotation(annotation.id)}>
                           Save

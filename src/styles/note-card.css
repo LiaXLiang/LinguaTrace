@@ -61,9 +61,9 @@
 /* Compact note cards */
 .compact-note-card {
   position: relative;
-  min-height: 180px;
-  padding: 26px 28px 22px;
-  border-radius: 24px;
+  min-height: 140px;
+  padding: 16px 18px 14px;
+  border-radius: 18px;
   text-align: left;
   background:
     radial-gradient(circle at top left, rgba(99, 102, 241, 0.12), transparent 36%),
@@ -84,29 +84,29 @@
 }
 
 .compact-page-info {
-  font-size: 13px;
-  margin-bottom: 10px;
+  font-size: 11px;
+  margin-bottom: 6px;
 }
 
 .compact-note-label {
   display: inline-block;
-  max-width: 150px;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-bottom: 10px;
-  padding: 8px 14px;
+  margin-bottom: 6px;
+  padding: 4px 9px;
   border-radius: 999px;
-  font-size: 13px;
-  font-weight: 750;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .compact-note-text {
-  margin: 30px 0 28px;
-  font-size: 26px;
-  line-height: 1.35;
-  color: rgba(248, 250, 252, 0.96);
-  word-break: break-word;
+  margin: 16px 0 16px;      /* 原来 30px 0 28px */
+  font-size: 18px;          /* 原来 26px */
+  line-height: 1.4;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 500;
 }
 
 .flashcard-clickable {
@@ -143,16 +143,16 @@
 
 .note-card-delete-x {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 14px;
+  right: 14px;
   z-index: 3;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: 999px;
   background: rgba(239, 68, 68, 0.12);
   color: #ff7373;
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
@@ -239,7 +239,7 @@
 
 /* Latest Notes card overrides */
 .latest-card .compact-note-card {
-  padding: 26px 20px 22px;
+  padding: 16px 16px 14px; 
 }
 
 .latest-card .note-card-top-row {
@@ -247,9 +247,9 @@
 }
 
 .latest-card .compact-note-label {
-  max-width: 118px;
-  padding: 8px 12px;
-  font-size: 12px;
+  max-width: 100px;
+  padding: 4px 8px;
+  font-size: 11px;
 }
 
 .latest-card .note-card-delete-x {

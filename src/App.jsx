@@ -38,6 +38,7 @@ export default function App() {
 
   const [selectionToolbar, setSelectionToolbar] = useState(null);
   const [textSelection, setTextSelection] = useState("");
+  const [nativeSelectionRects, setNativeSelectionRects] = useState([]);
 
 
   const [annotations, setAnnotations] = useState([]);
@@ -56,6 +57,8 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [editingLabel, setEditingLabel] = useState("");
   const [editingNote, setEditingNote] = useState("");
+  const [editingCardFront, setEditingCardFront] = useState("");
+  const [editingCardBack, setEditingCardBack] = useState("");
 
   const [extractedText, setExtractedText] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
@@ -97,6 +100,7 @@ export default function App() {
   
   function resetSelectionState() {
     setDraftRect(null);
+    setNativeSelectionRects([]);
     setLabelText("");
     setNoteText("");
     setExtractedText("");
@@ -154,23 +158,39 @@ export default function App() {
   }
 
   async function openPdfFromLibrary(pdfItem, targetPage = pdfItem.lastPage || 1) {
+    console.log(pdfItem);
     if (!pdfItem) return;
 
-    setStatus(`Opening ${pdfItem.fileName}...`);
-    resetSelectionState();
+    console.log("openPdfFromLibrary pdfItem:", pdfItem);
 
-    const { data, error } = await supabase.storage
-      .from(PDF_BUCKET)
-      .download(pdfItem.storagePath);
-
-    if (error) {
-      setStatus("Failed to open saved PDF from storage.");
+    if (!pdfItem.storagePath) {
+      console.error("Missing storagePath in pdfItem:", pdfItem);
+      setView("reader");
+      setStatus("Cannot open PDF: missing storage path.");
       return;
     }
 
+    setView("reader");
+    setStatus(`Opening ${pdfItem.fileName}...`);
+    resetSelectionState();
+
     try {
+      const { data, error } = await supabase.storage
+        .from(PDF_BUCKET)
+        .download(pdfItem.storagePath);
+
+      if (error) {
+        console.error("Storage download error:", error);
+        setStatus(`Failed to download PDF: ${error.message}`);
+        return;
+      }
+
       const arrayBuffer = await data.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      const pdf = await pdfjsLib.getDocument({
+        data: new Uint8Array(arrayBuffer),
+      }).promise;
+
       const safePage = Math.min(Math.max(targetPage || 1, 1), pdf.numPages);
 
       setPdfDoc(pdf);
@@ -178,28 +198,12 @@ export default function App() {
       setPdfName(pdfItem.fileName);
       setTotalPages(pdf.numPages);
       setCurrentPage(safePage);
-      setView("reader");
       setStatus(`Loaded: ${pdfItem.fileName}`);
 
-      await supabase
-        .from("pdf_documents")
-        .update({
-          last_page: safePage,
-          total_pages: pdf.numPages,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", pdfItem.id)
-        .eq("user_id", pdfItem.userId);
-
-      setPdfLibrary((prev) =>
-        prev.map((item) =>
-          item.id === pdfItem.id
-            ? { ...item, lastPage: safePage, totalPages: pdf.numPages }
-            : item
-        )
-      );
-    } catch {
-      setStatus("Failed to render saved PDF.");
+      await rememberCurrentPdfPage(safePage);
+    } catch (error) {
+      console.error("openPdfFromLibrary fatal error:", error);
+      setStatus(`Failed to open PDF: ${error.message}`);
     }
   }
 
@@ -353,9 +357,6 @@ export default function App() {
     const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const storagePath = `${user.id}/${Date.now()}-${safeFileName}`;
 
-    const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
-    console.log("Buckets visible from frontend:", buckets);
-    console.log("Bucket list error:", bucketError);
     console.log("Current user id:", user.id);
     console.log("Trying bucket:", PDF_BUCKET);
 
@@ -651,20 +652,46 @@ export default function App() {
     const selection = window.getSelection();
     const selectedText = selection?.toString().trim();
 
-    if (!selectedText || !selection || selection.rangeCount === 0) {
+    if (!selectedText || !selection || selection.rangeCount === 0 || !pageRef.current) {
       setTextSelection("");
       return false;
     }
 
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const pageRect = pageRef.current.getBoundingClientRect();
+
+    const clientRects = Array.from(range.getClientRects());
+
+    setNativeSelectionRects(
+      clientRects.map((clientRect) => ({
+        x: clientRect.left - pageRect.left,
+        y: clientRect.top - pageRect.top,
+        width: clientRect.width,
+        height: clientRect.height,
+      }))
+    );
+
     setTextSelection(selectedText);
     setExtractedText(selectedText);
 
-    // Native text selection 不需要矩形框
-    setDraftRect(null);
-    setSelectionToolbar(null);
+    // Native text selection 不需要十字高亮框
+    const boundingRect = {
+      x: rect.left - pageRect.left,
+      y: rect.top - pageRect.top,
+      width: rect.width,
+      height: rect.height,
+    };
+
+    setDraftRect(boundingRect);
+
+    // 但仍然显示一个浮动按钮，只是文字变成 Add Note
+    placeToolbarAtRect(rect, pageRect, "native", selectedText);
 
     return true;
   }
+
+
 
   function appendExtractedTextToNote(text) {
     const cleanText = text.trim();
@@ -758,8 +785,14 @@ export default function App() {
     event?.stopPropagation();
 
     if (selectionToolbar?.type === "native" && textSelection.trim()) {
-      appendExtractedTextToNote(textSelection);
-      setExtractedText(textSelection);
+      const selected = textSelection.trim();
+
+      setExtractedText(selected);
+
+      if (noteType === "flashcard" && !cardFront.trim()) {
+        setCardFront(selected);
+      }
+
       setSelectionToolbar(null);
       return;
     }
@@ -775,18 +808,25 @@ export default function App() {
 
   async function saveAnnotation() {
     if (!user) return;
-    if (!draftRect && !textSelection.trim()) return;
+
+    const finalExtractedText = extractedText.trim() || textSelection.trim();
+
+    if (!draftRect || !finalExtractedText) {
+      setStatus("Please select text or an area before saving.");
+      return;
+    }
 
     const finalLabel = labelText.trim() || "Unlabeled";
 
-    const normalizedRect = draftRect && pageSize.width && pageSize.height
-      ? {
-          x: draftRect.x / pageSize.width,
-          y: draftRect.y / pageSize.height,
-          width: draftRect.width / pageSize.width,
-          height: draftRect.height / pageSize.height,
-        }
-      : null;
+    const normalizedRect =
+      draftRect && pageSize.width && pageSize.height
+        ? {
+            x: draftRect.x / pageSize.width,
+            y: draftRect.y / pageSize.height,
+            width: draftRect.width / pageSize.width,
+            height: draftRect.height / pageSize.height,
+          }
+        : null;
 
     const { data, error } = await supabase
       .from("annotations")
@@ -797,7 +837,7 @@ export default function App() {
         rect: normalizedRect,
         label: finalLabel,
         note: noteText.trim(),
-        extracted_text: extractedText || textSelection || "",
+        extracted_text: finalExtractedText,
         note_type: noteType,
         card_front: noteType === "flashcard" ? cardFront.trim() : "",
         card_back: noteType === "flashcard" ? cardBack.trim() : "",
@@ -806,7 +846,8 @@ export default function App() {
       .single();
 
     if (error) {
-      setStatus("Failed to save note to database.");
+      console.error("Save annotation error:", error);
+      setStatus(`Failed to save note: ${error.message}`);
       return;
     }
 
@@ -845,12 +886,16 @@ export default function App() {
     setEditingId(annotation.id);
     setEditingLabel(annotation.label || "");
     setEditingNote(annotation.note || "");
+    setEditingCardFront(annotation.cardFront || "");
+    setEditingCardBack(annotation.cardBack || "");
   }
 
   function cancelEditAnnotation() {
     setEditingId(null);
     setEditingLabel("");
     setEditingNote("");
+    setEditingCardFront("");
+    setEditingCardBack("");
   }
 
   async function saveEditedAnnotation(id) {
@@ -862,6 +907,8 @@ export default function App() {
       .update({
         label: finalLabel,
         note: editingNote.trim(),
+        card_front: editingCardFront.trim(),
+        card_back: editingCardBack.trim(),
         updated_at: updatedAt,
       })
       .eq("id", id);
@@ -878,6 +925,8 @@ export default function App() {
               ...item,
               label: finalLabel,
               note: editingNote.trim(),
+              cardFront: editingCardFront.trim(),
+              cardBack: editingCardBack.trim(),
               updatedAt,
             }
           : item
@@ -1035,6 +1084,10 @@ export default function App() {
       setEditingLabel={setEditingLabel}
       editingNote={editingNote}
       setEditingNote={setEditingNote}
+      editingCardFront={editingCardFront}
+      setEditingCardFront={setEditingCardFront}
+      editingCardBack={editingCardBack}
+      setEditingCardBack={setEditingCardBack}
 
       customLabels={customLabels}
 
@@ -1147,13 +1200,15 @@ export default function App() {
                 <div ref={textLayerRef} className="pdf-text-layer" />
 
                 <div className="highlight-layer">
-                  {currentPageAnnotations.map((annotation) => (
-                    <div
-                      key={annotation.id}
-                      className="highlight saved-highlight"
-                      style={rectToStyle(annotation.rect)}
-                    />
-                  ))}
+                  {currentPageAnnotations
+                    .filter((annotation) => annotation.rect)
+                    .map((annotation) => (
+                      <div
+                        key={annotation.id}
+                        className="highlight saved-highlight"
+                        style={rectToStyle(annotation.rect)}
+                      />
+                    ))}
 
                   {draftRect && (
                     <div
@@ -1166,27 +1221,31 @@ export default function App() {
                       }}
                     />
                   )}
+
+                  {nativeSelectionRects.map((rect, index) => (
+                    <div
+                      key={`native-selection-${index}`}
+                      className="highlight native-selection-highlight"
+                      style={{
+                        left: rect.x,
+                        top: rect.y,
+                        width: rect.width,
+                        height: rect.height,
+                      }}
+                    />
+                  ))}
                 </div>
 
                 {selectionToolbar && (
                   <button
-                    type="button"
                     className="selection-toolbar"
                     style={{
                       left: selectionToolbar.x,
                       top: selectionToolbar.y,
                     }}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onMouseUp={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
                     onClick={handleFloatingExtractText}
                   >
-                    Extract Text
+                    {selectionToolbar.type === "native" ? "Add Note" : "Extract Text"}
                   </button>
                 )}
               </div>
@@ -1198,7 +1257,7 @@ export default function App() {
           <section className="note-editor-card">
             <h2>Add Note</h2>
 
-            {draftRect ? (
+            {draftRect || extractedText.trim() ? (
               <>
                 {extractError && <p className="error-text">{extractError}</p>}
 
