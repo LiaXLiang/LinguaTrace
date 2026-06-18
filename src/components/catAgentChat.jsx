@@ -1,7 +1,12 @@
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown"
 
-export default function CatAgentChat({ open, onClose, extractedText, setExtractedText, }) {
+export default function CatAgentChat({ 
+    open, 
+    onClose, 
+    extractedText, 
+    setExtractedText,
+    agentPromptLabels = [], }) {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -11,8 +16,8 @@ export default function CatAgentChat({ open, onClose, extractedText, setExtracte
 
   const [input, setInput] = useState("");
 
-    async function sendMessage() {
-    const cleanInput = input.trim();
+  async function sendMessage(messageText = input) {
+    const cleanInput = messageText.trim();
     if (!cleanInput) return;
 
     const nextMessages = [
@@ -51,16 +56,18 @@ export default function CatAgentChat({ open, onClose, extractedText, setExtracte
         ...prev,
         {
             role: "assistant",
-            content: data.reply || "Meow~ Sorry, I couldn't think of a reply right now.",
+            content:
+            data.reply ||
+            "Meow~ Sorry, I couldn't think of a reply right now.",
         },
         ]);
-        
     } catch (error) {
         setMessages((prev) => [
         ...prev,
         {
             role: "assistant",
-            content: "Meow~ I can't reach my AI brain right now. Please make sure the server is running.",
+            content:
+            "Meow~ I can't reach my AI brain right now. Please make sure the server is running.",
         },
         ]);
     }
@@ -70,24 +77,28 @@ export default function CatAgentChat({ open, onClose, extractedText, setExtracte
     <div className={open ? "cat-agent-overlay open" : "cat-agent-overlay"}>
     <div className="cat-agent-panel">
     
-        <div className="cat-agent-avatar">
-            <img src={`${import.meta.env.BASE_URL}cat-avatar.png`}
-            alt="Cat Assistant" />
-        </div>
-
         <div className="cat-agent-header">
-            <button
+        <button
             type="button"
             className="cat-close-button"
             onClick={onClose}
-            >
+        >
             ×
-            </button>
+        </button>
+        </div>
+
+        <div className="cat-context-row">
+        <div className="cat-agent-avatar">
+            <img
+            src={`${import.meta.env.BASE_URL}cat-avatar.png`}
+            alt="Cat Assistant"
+            />
         </div>
 
         <div className="cat-context">
             <span>Selected text</span>
             <p>{extractedText}</p>
+        </div>
         </div>
 
         <div className="cat-messages">
@@ -106,6 +117,21 @@ export default function CatAgentChat({ open, onClose, extractedText, setExtracte
             </div>
           ))}
         </div>
+
+        {agentPromptLabels.length > 0 && (
+        <div className="cat-prompt-labels">
+            {agentPromptLabels.map((item) => (
+            <button
+                key={item.id}
+                type="button"
+                className="cat-prompt-label"
+                onClick={() => sendMessage(item.prompt)}
+            >
+                {item.title}
+            </button>
+            ))}
+        </div>
+        )}
 
         <div className="cat-input-row">
         <input

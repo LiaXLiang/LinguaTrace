@@ -316,3 +316,62 @@
   color: rgba(255,255,255,0.7);
   white-space: nowrap;
 }
+
+
+/*prompt settings*/
+.agent-prompt-settings-card {
+  margin-top: 22px;
+}
+
+.agent-prompt-add-button {
+  border: 1px solid rgba(147, 197, 253, 0.45);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(59, 130, 246, 0.18);
+  color: #dbeafe;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.agent-prompt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.agent-prompt-item {
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.agent-prompt-title-input,
+.agent-prompt-textarea {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+  color: white;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.agent-prompt-textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.agent-prompt-delete-button {
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #fecaca;
+  font-weight: 800;
+  cursor: pointer;
+}

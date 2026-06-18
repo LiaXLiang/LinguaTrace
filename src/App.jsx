@@ -70,6 +70,25 @@ export default function App() {
 
   const [agentOpen, setAgentOpen] = useState(false);
 
+  const DEFAULT_AGENT_PROMPT_LABELS = [
+    {
+      id: "explain",
+      title: "Explain",
+      prompt: "Explain the selected text clearly and simply.",
+    },
+    {
+      id: "examples",
+      title: "More examples",
+      prompt: "Give me more example sentences using the selected text.",
+    },
+  ];
+
+  const [agentPromptLabels, setAgentPromptLabels] = useState(() => {
+    const saved = localStorage.getItem("linguatrace-agent-prompt-labels");
+    return saved ? JSON.parse(saved) : DEFAULT_AGENT_PROMPT_LABELS;
+  });
+
+
   const LABEL_COLOR_PALETTE = [
     "#3b82f6",
     "#8b5cf6",
@@ -262,6 +281,15 @@ export default function App() {
       return changed ? next : prev;
     });
   }, [customLabels]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "linguatrace-agent-prompt-labels",
+      JSON.stringify(agentPromptLabels)
+    );
+  }, [agentPromptLabels]);
+
+
 
   useEffect(() => {
     localStorage.setItem(
@@ -1107,6 +1135,8 @@ export default function App() {
         customLabels={customLabels}
         labelColors={labelColors}
         setLabelColors={setLabelColors}
+        agentPromptLabels={agentPromptLabels}
+        setAgentPromptLabels={setAgentPromptLabels}
         setView={setView}
         signOut={signOut}
       />
@@ -1434,6 +1464,7 @@ export default function App() {
         onClose={() => setAgentOpen(false)}
         extractedText={extractedText}
         setExtractedText={setExtractedText}
+        agentPromptLabels={agentPromptLabels}
       />
     </div>
   );
