@@ -841,8 +841,15 @@ export default function App() {
 
     const finalExtractedText = extractedText.trim() || textSelection.trim();
 
-    if (!draftRect || !finalExtractedText) {
-      setStatus("Please select text or an area before saving.");
+    const hasManualNote =
+      noteType === "normal" && noteText.trim();
+
+    const hasFlashcard =
+      noteType === "flashcard" &&
+      (cardFront.trim() || cardBack.trim());
+
+    if (!finalExtractedText && !hasManualNote && !hasFlashcard) {
+      setStatus("Please write a note, create a flashcard, or select text first.");
       return;
     }
 
@@ -1301,111 +1308,104 @@ export default function App() {
               </button>
             </div>
 
-            {draftRect || extractedText.trim() ? (
-              <>
-                {extractError && <p className="error-text">{extractError}</p>}
+            {extractError && <p className="error-text">{extractError}</p>}
 
-                {extractedText && (
-                  <div className="ocr-result-card">
-                    <div className="ocr-header-row">
-                      <h3>Extracted Text</h3>
+            {extractedText && (
+              <div className="ocr-result-card">
+                <div className="ocr-header-row">
+                  <h3>Extracted Text</h3>
 
-                      <div className="ocr-actions">
-
-                        <button
-                          type="button"
-                          className="icon-button"
-                          onClick={copyExtractedText}
-                          aria-label="Copy extracted text"
-                          title="Copy"
-                        >
-                          ⧉
-                        </button>
-                      </div>
-                    </div>
-
-                    <textarea
-                      className="extracted-text-editor"
-                      value={extractedText}
-                      onChange={(event) => setExtractedText(event.target.value)}
-                      placeholder="Edit extracted text..."
-                    />
-                  </div>
-                )}
-
-                <div className="note-type-switch">
-                  <button
-                    type="button"
-                    className={noteType === "normal" ? "active" : ""}
-                    onClick={() => setNoteType("normal")}
-                  >
-                    Normal Note
-                  </button>
-
-                  <button
-                    type="button"
-                    className={noteType === "flashcard" ? "active" : ""}
-                    onClick={() => setNoteType("flashcard")}
-                  >
-                    Flashcard
-                  </button>
-                </div>
-
-                {noteType === "flashcard" ? (
-                  <div className="flashcard-editor">
-                    <input
-                      className="label-input"
-                      value={cardFront}
-                      onChange={(event) => setCardFront(event.target.value)}
-                      placeholder="Front side, e.g. 능력"
-                    />
-
-                    <textarea
-                      value={cardBack}
-                      onChange={(event) => setCardBack(event.target.value)}
-                      placeholder="Back side, e.g. 能力 / ability"
-                    />
-                  </div>
-                ) : (
-                  <textarea
-                    value={noteText}
-                    onChange={(event) => setNoteText(event.target.value)}
-                    placeholder="Write your note..."
-                  />
-                )}
-                <div className="label-composer">
-                  <input
-                    className="label-input"
-                    value={labelText}
-                    onChange={(event) => setLabelText(event.target.value)}
-                    placeholder="Create or choose a label"
-                  />
-
-                  <div className="label-suggestions">
-                    {customLabels.map((label) => (
-                      <button
-                        key={label}
-                        type="button"
-                        className={
-                          labelText === label
-                            ? "label-chip active"
-                            : "label-chip"
-                        }
-                        style={{ "--label-color": labelColors[label] || "#64748b" }}
-                        onClick={() => setLabelText(label)}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                  <div className="ocr-actions">
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={copyExtractedText}
+                      aria-label="Copy extracted text"
+                      title="Copy"
+                    >
+                      ⧉
+                    </button>
                   </div>
                 </div>
-                <button onClick={saveAnnotation}>Save Note</button>
-              </>
-            ) : (
-              <div className="placeholder">
-                Drag over the PDF to create a highlight.
+
+                <textarea
+                  className="extracted-text-editor"
+                  value={extractedText}
+                  onChange={(event) => setExtractedText(event.target.value)}
+                  placeholder="Edit extracted text..."
+                />
               </div>
             )}
+
+            <div className="note-type-switch">
+              <button
+                type="button"
+                className={noteType === "normal" ? "active" : ""}
+                onClick={() => setNoteType("normal")}
+              >
+                Normal Note
+              </button>
+
+              <button
+                type="button"
+                className={noteType === "flashcard" ? "active" : ""}
+                onClick={() => setNoteType("flashcard")}
+              >
+                Flashcard
+              </button>
+            </div>
+
+            {noteType === "flashcard" ? (
+              <div className="flashcard-editor">
+                <input
+                  className="label-input"
+                  value={cardFront}
+                  onChange={(event) => setCardFront(event.target.value)}
+                  placeholder="Front side, e.g. 능력"
+                />
+
+                <textarea
+                  value={cardBack}
+                  onChange={(event) => setCardBack(event.target.value)}
+                  placeholder="Back side, e.g. 能力 / ability"
+                />
+              </div>
+            ) : (
+              <textarea
+                value={noteText}
+                onChange={(event) => setNoteText(event.target.value)}
+                placeholder="Write your note..."
+              />
+            )}
+
+            <div className="label-composer">
+              <input
+                className="label-input"
+                value={labelText}
+                onChange={(event) => setLabelText(event.target.value)}
+                placeholder="Create or choose a label"
+              />
+
+              <div className="label-suggestions">
+                {customLabels.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={
+                      labelText === label
+                        ? "label-chip active"
+                        : "label-chip"
+                    }
+                    style={{ "--label-color": labelColors[label] || "#64748b" }}
+                    onClick={() => setLabelText(label)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button onClick={saveAnnotation}>Save Note</button>
           </section>
 
           <section className="latest-card">

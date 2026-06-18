@@ -11,6 +11,10 @@ export default function SettingsPanel({
 }) {
   const [activeLabel, setActiveLabel] = useState(null);
 
+  const [editingPromptId, setEditingPromptId] = useState(null);
+  const [draftPromptTitle, setDraftPromptTitle] = useState("");
+  const [draftPromptText, setDraftPromptText] = useState("");
+
   function updateLabelColor(label, color) {
     setLabelColors((prev) => ({
       ...prev,
@@ -18,13 +22,55 @@ export default function SettingsPanel({
     }));
   }
 
-function updateAgentPromptLabel(id, field, value) {
-  setAgentPromptLabels((prev) =>
-    prev.map((item) =>
-      item.id === id ? { ...item, [field]: value } : item
-    )
-  );
-}
+  function startEditAgentPromptLabel(item) {
+    setEditingPromptId(item.id);
+    setDraftPromptTitle(item.title);
+    setDraftPromptText(item.prompt);
+  }
+
+  function cancelEditAgentPromptLabel() {
+    setEditingPromptId(null);
+    setDraftPromptTitle("");
+    setDraftPromptText("");
+  }
+
+  function saveAgentPromptLabel(id) {
+    setAgentPromptLabels((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              title: draftPromptTitle.trim() || "Untitled",
+              prompt: draftPromptText.trim(),
+            }
+          : item
+      )
+    );
+
+    cancelEditAgentPromptLabel();
+  }
+
+  function addAgentPromptLabel() {
+    const newItem = {
+      id: crypto.randomUUID(),
+      title: "New action",
+      prompt: "Write your prompt here.",
+    };
+
+    setAgentPromptLabels((prev) => [...prev, newItem]);
+
+    setEditingPromptId(newItem.id);
+    setDraftPromptTitle(newItem.title);
+    setDraftPromptText(newItem.prompt);
+  }
+
+  function updateAgentPromptLabel(id, field, value) {
+    setAgentPromptLabels((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    );
+  }
 
   function addAgentPromptLabel() {
     setAgentPromptLabels((prev) => [
@@ -145,35 +191,85 @@ function updateAgentPromptLabel(id, field, value) {
           </div>
 
           <div className="agent-prompt-list">
-            {agentPromptLabels.map((item) => (
-              <div className="agent-prompt-item" key={item.id}>
-                <input
-                  className="agent-prompt-title-input"
-                  value={item.title}
-                  onChange={(event) =>
-                    updateAgentPromptLabel(item.id, "title", event.target.value)
-                  }
-                  placeholder="Button name, e.g. Explain"
-                />
+            {agentPromptLabels.map((item) => {
+              const isEditing = editingPromptId === item.id;
 
-                <textarea
-                  className="agent-prompt-textarea"
-                  value={item.prompt}
-                  onChange={(event) =>
-                    updateAgentPromptLabel(item.id, "prompt", event.target.value)
-                  }
-                  placeholder="Prompt sent to AI..."
-                />
+              return (
+                <div className="agent-prompt-item" key={item.id}>
+                  <div className="agent-prompt-top-row">
+                    {isEditing ? (
+                      <input
+                        className="agent-prompt-title-input"
+                        value={draftPromptTitle}
+                        onChange={(event) => setDraftPromptTitle(event.target.value)}
+                        placeholder="Button name"
+                      />
+                    ) : (
+                      <button type="button" className="cat-prompt-label preview-agent-label">
+                        {item.title}
+                      </button>
+                    )}
 
-                <button
-                  type="button"
-                  className="agent-prompt-delete-button"
-                  onClick={() => deleteAgentPromptLabel(item.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            ))}
+                    <div className="agent-prompt-actions">
+                      {isEditing ? (
+                        <>
+                          <button
+                            type="button"
+                            className="agent-prompt-save-button"
+                            onClick={() => saveAgentPromptLabel(item.id)}
+                          >
+                            Save
+                          </button>
+
+                          <button
+                            type="button"
+                            className="agent-prompt-cancel-button"
+                            onClick={cancelEditAgentPromptLabel}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="agent-prompt-modify-button"
+                            onClick={() => startEditAgentPromptLabel(item)}
+                          >
+                            Modify
+                          </button>
+
+                          <button
+                            type="button"
+                            className="agent-prompt-delete-button"
+                            onClick={() =>
+                              setAgentPromptLabels((prev) =>
+                                prev.filter((label) => label.id !== item.id)
+                              )
+                            }
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEditing ? (
+                    <textarea
+                      className="agent-prompt-textarea"
+                      value={draftPromptText}
+                      onChange={(event) => setDraftPromptText(event.target.value)}
+                      placeholder="Prompt sent to AI..."
+                    />
+                  ) : (
+                    <div className="agent-prompt-preview-text">
+                      {item.prompt}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
       </main>
