@@ -21,18 +21,16 @@ export default function AuthPanel() {
     setIsLoading(true);
     setStatus("");
 
-    const authAction =
+    const { error } =
       mode === "signin"
-        ? supabase.auth.signInWithPassword({
+        ? await supabase.auth.signInWithPassword({
             email: email.trim(),
             password,
           })
-        : supabase.auth.signUp({
+        : await supabase.auth.signUp({
             email: email.trim(),
             password,
           });
-
-    const { error } = await authAction;
 
     if (error) {
       setStatus(error.message);
@@ -41,7 +39,9 @@ export default function AuthPanel() {
     }
 
     if (mode === "signup") {
-      setStatus("Account created. Please check your email if confirmation is enabled.");
+      setStatus(
+        "Account created. Please check your email if confirmation is enabled."
+      );
     }
 
     setIsLoading(false);
@@ -68,23 +68,23 @@ export default function AuthPanel() {
 
         <div className="auth-tabs">
           <button
+            type="button"
             className={mode === "signin" ? "active" : ""}
             onClick={() => {
               setMode("signin");
               setStatus("");
             }}
-            type="button"
           >
             Sign in
           </button>
 
           <button
+            type="button"
             className={mode === "signup" ? "active" : ""}
             onClick={() => {
               setMode("signup");
               setStatus("");
             }}
-            type="button"
           >
             Create account
           </button>

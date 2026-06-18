@@ -61,11 +61,16 @@ export default function SettingsPanel({
       <main className="settings-page compact-settings-page">
         <div className="settings-page-header compact-settings-header">
           <h2>Settings</h2>
-          <p>Click a label to change its color.</p>
         </div>
 
         <section className="settings-card compact-settings-card">
-          <h3>Label Colors</h3>
+          <div className="settings-title-row">
+            <h3>Label Colors</h3>
+            <span className="settings-title-hint">
+              Click a label to change its color.
+            </span>
+          </div>
+
 
           <div className="settings-label-cloud">
             {customLabels.map((label) => {

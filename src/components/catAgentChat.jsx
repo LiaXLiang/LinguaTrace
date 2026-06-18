@@ -1,30 +1,70 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import ReactMarkdown from "react-markdown"
 
-export default function CatAgentChat({ open, onClose, extractedText }) {
+export default function CatAgentChat({ open, onClose, extractedText, setExtractedText, }) {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      content: "Meow～我可以帮你解释这段文字、生成例句、翻译或做成闪卡。",
+      content: "Meow～ My name is Oreo. How can I help you today?",
     },
   ]);
 
   const [input, setInput] = useState("");
 
-  function sendMessage() {
+    async function sendMessage() {
     const cleanInput = input.trim();
     if (!cleanInput) return;
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: cleanInput },
-      {
-        role: "assistant",
-        content: `我会基于这段内容回答：${extractedText}`,
-      },
-    ]);
+    const nextMessages = [
+        ...messages,
+        { role: "user", content: cleanInput },
+    ];
 
+    setMessages(nextMessages);
     setInput("");
-  }
+
+    try {
+        const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/chat`,
+        {
+            method: "POST",
+            headers: {
+            "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+            extractedText,
+            messages: nextMessages.map((message) => ({
+                role: message.role,
+                content: message.content,
+            })),
+            }),
+        }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+        throw new Error(data.error || "AI request failed");
+        }
+
+        setMessages((prev) => [
+        ...prev,
+        {
+            role: "assistant",
+            content: data.reply || "Meow~ Sorry, I couldn't think of a reply right now.",
+        },
+        ]);
+        
+    } catch (error) {
+        setMessages((prev) => [
+        ...prev,
+        {
+            role: "assistant",
+            content: "Meow~ I can't reach my AI brain right now. Please make sure the server is running.",
+        },
+        ]);
+    }
+    }
 
   return (
     <div className={open ? "cat-agent-overlay open" : "cat-agent-overlay"}>
@@ -37,6 +77,7 @@ export default function CatAgentChat({ open, onClose, extractedText }) {
 
         <div className="cat-agent-header">
             <button
+            type="button"
             className="cat-close-button"
             onClick={onClose}
             >
@@ -59,22 +100,33 @@ export default function CatAgentChat({ open, onClose, extractedText }) {
                   : "cat-message assistant-message"
               }
             >
-              {message.content}
+                <ReactMarkdown>
+                    {message.content}
+                </ReactMarkdown>
             </div>
           ))}
         </div>
 
         <div className="cat-input-row">
-          <input
+        <input
+            className={input.trim() === "" ? "cat-input-empty" : "cat-input-typing"}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") sendMessage();
+            if (event.key === "Enter") {
+                event.preventDefault();
+                sendMessage();
+            }
             }}
-            placeholder="Ask anything about this text..."
-          />
+            placeholder="Meow something..."
+        />
 
-          <button onClick={sendMessage}>Send</button>
+        <button
+            type="button"
+            onClick={sendMessage}
+        >
+            Send
+        </button>
         </div>
       </div>
     </div>

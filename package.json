@@ -11,11 +11,15 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "idb-keyval": "^6.2.5",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.0.227",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-markdown": "^10.1.0",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {

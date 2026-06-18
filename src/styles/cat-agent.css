@@ -106,6 +106,10 @@
   color: white;
 }
 
+
+
+
+
 .cat-input-row {
   margin-top: 16px;
   display: flex;
@@ -117,15 +121,27 @@
   height: 44px;
   border-radius: 999px;
   padding: 0 16px;
+
+  background: #383838;
+  color: white;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.cat-input-row button {
-  height: 44px;
-  border-radius: 999px;
-  padding: 0 18px;
+.cat-input-empty {
+  border: 3px solid #93c5fd;
+  box-shadow: 0 0 14px rgba(147, 197, 253, 0.45);
+}
+
+.cat-input-typing {
+  border: 3px solid #8b8b8b;
+  box-shadow: none;
 }
 
 
+
+
+/* cat avatar*/
 .cat-agent-avatar {
   position: absolute;
 
@@ -258,3 +274,24 @@
     opacity: 1;
   }
 }
+
+
+
+.note-editor-title-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 24px !important;
+  width: 100% !important;
+  margin-bottom: 28px !important;
+}
+
+.note-editor-title-row h2 {
+  margin: 0 !important;
+  text-align: left !important;
+}
+
+.note-editor-ai-button {
+  flex-shrink: 0 !important;
+}
+

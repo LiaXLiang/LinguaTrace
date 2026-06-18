@@ -1257,7 +1257,19 @@ export default function App() {
 
         <aside className="right-panel">
           <section className="note-editor-card">
-            <h2>Add Note</h2>
+            <div className="note-editor-title-row">
+              <h2>Add Note</h2>
+
+              <button
+                type="button"
+                className="ask-ai-button fancy-ai-button"
+                onClick={() => setAgentOpen(true)}
+              >
+                <span className="ai-bot-icon">🤖</span>
+                <span>Ask AI</span>
+                <span className="ai-sparkle">✦</span>
+              </button>
+            </div>
 
             {draftRect || extractedText.trim() ? (
               <>
@@ -1269,15 +1281,6 @@ export default function App() {
                       <h3>Extracted Text</h3>
 
                       <div className="ocr-actions">
-                        <button
-                          type="button"
-                          className="ask-ai-button fancy-ai-button"
-                          onClick={() => setAgentOpen(true)}
-                        >
-                          <span className="ai-bot-icon">🤖</span>
-                          <span>Ask AI</span>
-                          <span className="ai-sparkle">✦</span>
-                        </button>
 
                         <button
                           type="button"
@@ -1430,6 +1433,7 @@ export default function App() {
         open={agentOpen}
         onClose={() => setAgentOpen(false)}
         extractedText={extractedText}
+        setExtractedText={setExtractedText}
       />
     </div>
   );
