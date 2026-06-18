@@ -4,22 +4,50 @@ export default function SettingsPanel({
   customLabels,
   labelColors,
   setLabelColors,
+  renameLabelEverywhere,
+  deleteLabelEverywhere,
   agentPromptLabels,
   setAgentPromptLabels,
   setView,
   signOut,
 }) {
-  const [activeLabel, setActiveLabel] = useState(null);
+  const [activeLabel, setActiveLabel] = useState(customLabels[0] || null);
+
+  const [editingLabelName, setEditingLabelName] = useState(null);
+  const [draftLabelName, setDraftLabelName] = useState("");
 
   const [editingPromptId, setEditingPromptId] = useState(null);
   const [draftPromptTitle, setDraftPromptTitle] = useState("");
   const [draftPromptText, setDraftPromptText] = useState("");
+
+  const selectedLabel = customLabels.find((label) => label === activeLabel) || customLabels[0] || null;
+  const selectedLabelColor = selectedLabel ? labelColors[selectedLabel] || "#64748b" : "#64748b";
 
   function updateLabelColor(label, color) {
     setLabelColors((prev) => ({
       ...prev,
       [label]: color,
     }));
+  }
+
+  function startEditLabelName(label) {
+    setEditingLabelName(label);
+    setDraftLabelName(label);
+    setActiveLabel(label);
+  }
+
+  function cancelEditLabelName() {
+    setEditingLabelName(null);
+    setDraftLabelName("");
+  }
+
+  async function saveLabelName(oldLabel) {
+    const cleanNewLabel = draftLabelName.trim();
+    if (!cleanNewLabel) return;
+
+    await renameLabelEverywhere(oldLabel, cleanNewLabel);
+    setActiveLabel(cleanNewLabel);
+    cancelEditLabelName();
   }
 
   function startEditAgentPromptLabel(item) {
@@ -58,29 +86,7 @@ export default function SettingsPanel({
     };
 
     setAgentPromptLabels((prev) => [...prev, newItem]);
-
-    setEditingPromptId(newItem.id);
-    setDraftPromptTitle(newItem.title);
-    setDraftPromptText(newItem.prompt);
-  }
-
-  function updateAgentPromptLabel(id, field, value) {
-    setAgentPromptLabels((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      )
-    );
-  }
-
-  function addAgentPromptLabel() {
-    setAgentPromptLabels((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        title: "New action",
-        prompt: "Write your prompt here.",
-      },
-    ]);
+    startEditAgentPromptLabel(newItem);
   }
 
   function deleteAgentPromptLabel(id) {
@@ -99,31 +105,19 @@ export default function SettingsPanel({
         </div>
 
         <nav className="topnav" aria-label="Main navigation">
-          <button
-            type="button"
-            className="nav-link active"
-            onClick={() => setView("settings")}
-          >
+          <button type="button" className="nav-link active" onClick={() => setView("settings")}>
             Settings
           </button>
 
-         <button className="nav-link" onClick={() => setView("reader")}>
-             Reader
-         </button>
+          <button className="nav-link" onClick={() => setView("reader")}>
+            Reader
+          </button>
 
-          <button
-            type="button"
-            className="nav-link"
-            onClick={() => setView("history")}
-          >
+          <button type="button" className="nav-link" onClick={() => setView("history")}>
             Note History
           </button>
 
-          <button
-            type="button"
-            className="nav-link signout-link"
-            onClick={signOut}
-          >
+          <button type="button" className="nav-link signout-link" onClick={signOut}>
             Sign Out
           </button>
         </nav>
@@ -138,42 +132,128 @@ export default function SettingsPanel({
           <div className="settings-title-row">
             <h3>Label Colors</h3>
             <span className="settings-title-hint">
-              Click a label to change its color.
+              Select a label, then modify its name or color.
             </span>
           </div>
 
+          <div className="settings-label-manager">
+            <div className="settings-label-cloud advanced-label-cloud">
+              {customLabels.map((label) => {
+                const color = labelColors[label] || "#64748b";
 
-          <div className="settings-label-cloud">
-            {customLabels.map((label) => {
-              const color = labelColors[label] || "#64748b";
-
-              return (
-                <div className="settings-label-wrapper" key={label}>
+                return (
                   <button
+                    key={label}
                     type="button"
                     className={
-                      activeLabel === label
+                      selectedLabel === label
                         ? "settings-label-pill active"
                         : "settings-label-pill"
                     }
                     style={{ "--label-color": color }}
-                    onClick={() => setActiveLabel(label)}
+                    onClick={() => {
+                      setActiveLabel(label);
+                      cancelEditLabelName();
+                    }}
                   >
                     {label}
                   </button>
+                );
+              })}
+            </div>
 
-                  <input
-                    className="label-native-color-input"
-                    type="color"
-                    value={color}
-                    onChange={(event) =>
-                      updateLabelColor(label, event.target.value)
-                    }
-                    onClick={() => setActiveLabel(label)}
-                  />
+            {selectedLabel && (
+              <div className="label-editor-panel">
+                <div className="label-editor-preview">
+                  <span
+                    className="settings-label-pill label-editor-big-pill"
+                    style={{ "--label-color": selectedLabelColor }}
+                  >
+                    {editingLabelName === selectedLabel
+                      ? draftLabelName || "Untitled"
+                      : selectedLabel}
+                  </span>
                 </div>
-              );
-            })}
+
+                <div className="label-editor-fields">
+                  <label className="label-editor-field">
+                    <span>Name</span>
+
+                    {editingLabelName === selectedLabel ? (
+                      <input
+                        className="settings-label-name-input"
+                        value={draftLabelName}
+                        onChange={(event) => setDraftLabelName(event.target.value)}
+                        placeholder="Label name"
+                      />
+                    ) : (
+                      <div className="label-editor-readonly-name">
+                        {selectedLabel}
+                      </div>
+                    )}
+                  </label>
+
+                  <label className="label-editor-field">
+                    <span>Color</span>
+
+                    <input
+                      className="label-editor-color-input"
+                      type="color"
+                      value={selectedLabelColor}
+                      onChange={(event) =>
+                        updateLabelColor(selectedLabel, event.target.value)
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="label-editor-actions">
+                  {editingLabelName === selectedLabel ? (
+                    <>
+                      <button
+                        type="button"
+                        className="agent-prompt-save-button"
+                        onClick={() => saveLabelName(selectedLabel)}
+                      >
+                        Save
+                      </button>
+
+                      <button
+                        type="button"
+                        className="agent-prompt-cancel-button"
+                        onClick={cancelEditLabelName}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="agent-prompt-modify-button"
+                        onClick={() => startEditLabelName(selectedLabel)}
+                      >
+                        Modify
+                      </button>
+
+                      {selectedLabel !== "Unlabeled" && (
+                        <button
+                          type="button"
+                          className="agent-prompt-delete-button"
+                          onClick={() => {
+                            deleteLabelEverywhere(selectedLabel);
+                            setActiveLabel("Unlabeled");
+                            cancelEditLabelName();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -242,11 +322,7 @@ export default function SettingsPanel({
                           <button
                             type="button"
                             className="agent-prompt-delete-button"
-                            onClick={() =>
-                              setAgentPromptLabels((prev) =>
-                                prev.filter((label) => label.id !== item.id)
-                              )
-                            }
+                            onClick={() => deleteAgentPromptLabel(item.id)}
                           >
                             Delete
                           </button>

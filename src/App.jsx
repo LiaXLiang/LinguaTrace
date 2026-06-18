@@ -44,6 +44,7 @@ export default function App() {
 
   const [annotations, setAnnotations] = useState([]);
   const [draftRect, setDraftRect] = useState(null);
+  const [sourceAnnotationId, setSourceAnnotationId] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startPoint, setStartPoint] = useState(null);
 
@@ -60,6 +61,7 @@ export default function App() {
   const [editingNote, setEditingNote] = useState("");
   const [editingCardFront, setEditingCardFront] = useState("");
   const [editingCardBack, setEditingCardBack] = useState("");
+  const [editingNoteType, setEditingNoteType] = useState("normal");
 
   const [extractedText, setExtractedText] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
@@ -69,6 +71,7 @@ export default function App() {
   const [flippedFlashcards, setFlippedFlashcards] = useState({});
 
   const [agentOpen, setAgentOpen] = useState(false);
+  const [savedPdfModalOpen, setSavedPdfModalOpen] = useState(false);
 
   const DEFAULT_AGENT_PROMPT_LABELS = [
     {
@@ -925,6 +928,7 @@ export default function App() {
     setEditingNote(annotation.note || "");
     setEditingCardFront(annotation.cardFront || "");
     setEditingCardBack(annotation.cardBack || "");
+    setEditingNoteType(annotation.noteType || "normal");
   }
 
   function cancelEditAnnotation() {
@@ -933,6 +937,7 @@ export default function App() {
     setEditingNote("");
     setEditingCardFront("");
     setEditingCardBack("");
+    setEditingNoteType("normal")
   }
 
   async function saveEditedAnnotation(id) {
@@ -943,9 +948,10 @@ export default function App() {
       .from("annotations")
       .update({
         label: finalLabel,
-        note: editingNote.trim(),
-        card_front: editingCardFront.trim(),
-        card_back: editingCardBack.trim(),
+        note: editingNoteType === "normal" ? editingNote.trim() : "",
+        note_type: editingNoteType,
+        card_front: editingNoteType === "flashcard" ? editingCardFront.trim() : "",
+        card_back: editingNoteType === "flashcard" ? editingCardBack.trim() : "",
         updated_at: updatedAt,
       })
       .eq("id", id);
@@ -961,9 +967,10 @@ export default function App() {
           ? {
               ...item,
               label: finalLabel,
-              note: editingNote.trim(),
-              cardFront: editingCardFront.trim(),
-              cardBack: editingCardBack.trim(),
+              noteType: editingNoteType,
+              note: editingNoteType === "normal" ? editingNote.trim() : "",
+              cardFront: editingNoteType === "flashcard" ? editingCardFront.trim() : "",
+              cardBack: editingNoteType === "flashcard" ? editingCardBack.trim() : "",
               updatedAt,
             }
           : item
@@ -979,10 +986,111 @@ export default function App() {
     setStatus("Note updated.");
   }
 
+
+  async function renameLabelEverywhere(oldLabel, newLabel) {
+    const cleanOldLabel = oldLabel.trim();
+    const cleanNewLabel = newLabel.trim();
+
+    if (!cleanOldLabel || !cleanNewLabel || cleanOldLabel === cleanNewLabel) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("annotations")
+      .update({ label: cleanNewLabel })
+      .eq("user_id", user.id)
+      .eq("label", cleanOldLabel);
+
+    if (error) {
+      setStatus("Failed to rename label.");
+      return;
+    }
+
+    setAnnotations((prev) =>
+      prev.map((item) =>
+        item.label === cleanOldLabel
+          ? { ...item, label: cleanNewLabel }
+          : item
+      )
+    );
+
+    setCustomLabels((prev) =>
+      [...new Set(prev.map((label) => (label === cleanOldLabel ? cleanNewLabel : label)))]
+    );
+
+    setLabelColors((prev) => {
+      const next = { ...prev };
+
+      if (next[cleanOldLabel] && !next[cleanNewLabel]) {
+        next[cleanNewLabel] = next[cleanOldLabel];
+      }
+
+      delete next[cleanOldLabel];
+
+      return next;
+    });
+
+    if (labelText === cleanOldLabel) {
+      setLabelText(cleanNewLabel);
+    }
+
+    setStatus(`Label renamed to ${cleanNewLabel}.`);
+  }
+
+  async function deleteLabelEverywhere(labelToDelete) {
+    const cleanLabel = labelToDelete.trim();
+
+    if (!cleanLabel) return;
+
+    const confirmed = window.confirm(
+      `Delete label "${cleanLabel}"? Existing notes with this label will become "Unlabeled".`
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("annotations")
+      .update({ label: "Unlabeled" })
+      .eq("user_id", user.id)
+      .eq("label", cleanLabel);
+
+    if (error) {
+      setStatus("Failed to delete label.");
+      return;
+    }
+
+    setAnnotations((prev) =>
+      prev.map((item) =>
+        item.label === cleanLabel ? { ...item, label: "Unlabeled" } : item
+      )
+    );
+
+    setCustomLabels((prev) => prev.filter((label) => label !== cleanLabel));
+
+    setLabelColors((prev) => {
+      const next = { ...prev };
+      delete next[cleanLabel];
+      return next;
+    });
+
+    if (labelText === cleanLabel) {
+      setLabelText("");
+    }
+
+    setStatus(`Label "${cleanLabel}" deleted.`);
+  }
+
   async function jumpToAnnotation(annotation) {
     const matchingPdf = pdfLibrary.find(
       (item) => item.fileName === annotation.pdfName
     );
+
+    if (!annotation.rect) {
+      setStatus("This note has no saved source position.");
+      return;
+    }
+
+    setSourceAnnotationId(annotation.id);
 
     if (!pdfDoc || pdfName !== annotation.pdfName) {
       if (!matchingPdf) {
@@ -1002,20 +1110,19 @@ export default function App() {
 
     setTimeout(() => {
       const pageElement = pageRef.current;
-      if (!pageElement) return;
+      const pdfArea = pageElement?.closest(".pdf-area");
 
-      const targetY = annotation.rect.y * pageElement.offsetHeight;
+      if (!pageElement || !pdfArea) return;
 
-      pageElement.scrollIntoView({
+      const targetTop =
+        annotation.rect.y * pageElement.offsetHeight -
+        pdfArea.clientHeight / 2;
+
+      pdfArea.scrollTo({
+        top: Math.max(0, targetTop),
         behavior: "smooth",
-        block: "center",
       });
-
-      window.scrollBy({
-        top: targetY - window.innerHeight / 2,
-        behavior: "smooth",
-      });
-    }, 100);
+    }, 250);
   }
 
   async function deletePdfDocument(pdfItem) {
@@ -1126,6 +1233,9 @@ export default function App() {
       editingCardBack={editingCardBack}
       setEditingCardBack={setEditingCardBack}
 
+      editingNoteType={editingNoteType}
+      setEditingNoteType={setEditingNoteType}
+
       customLabels={customLabels}
 
       saveEditedAnnotation={saveEditedAnnotation}
@@ -1142,6 +1252,8 @@ export default function App() {
         customLabels={customLabels}
         labelColors={labelColors}
         setLabelColors={setLabelColors}
+        renameLabelEverywhere={renameLabelEverywhere}
+        deleteLabelEverywhere={deleteLabelEverywhere}
         agentPromptLabels={agentPromptLabels}
         setAgentPromptLabels={setAgentPromptLabels}
         setView={setView}
@@ -1199,8 +1311,17 @@ export default function App() {
             <div className="viewer-header">
               <h2>PDF Viewer</h2>
 
-              {totalPages > 0 && (
-                <div className="toolbar">
+              <div className="viewer-header-actions">
+                <button
+                  type="button"
+                  className="view-saved-pdf-button"
+                  onClick={() => setSavedPdfModalOpen(true)}
+                >
+                  View Saved PDF
+                </button>
+
+                {totalPages > 0 && (
+                  <div className="toolbar">
                   <button
                     onClick={() => goToPage(currentPage - 1)}
                     disabled={currentPage === 1}
@@ -1224,6 +1345,7 @@ export default function App() {
                   <button onClick={() => changeZoom(scale + 0.1)}>+</button>
                 </div>
               )}
+              </div>
             </div>
 
             <div className="pdf-area">
@@ -1244,7 +1366,11 @@ export default function App() {
                     .map((annotation) => (
                       <div
                         key={annotation.id}
-                        className="highlight saved-highlight"
+                        className={
+                          annotation.id === sourceAnnotationId
+                            ? "highlight source-highlight"
+                            : "highlight saved-highlight"
+                        }
                         style={rectToStyle(annotation.rect)}
                       />
                     ))}
@@ -1459,6 +1585,63 @@ export default function App() {
           </section>
         </aside>
       </main>
+      {savedPdfModalOpen && (
+        <div className="saved-pdf-modal-overlay">
+          <div className="saved-pdf-modal">
+            <div className="saved-pdf-modal-header">
+              <div>
+                <h2>Saved PDFs</h2>
+                <p>{pdfLibrary.length} PDFs</p>
+              </div>
+
+              <button
+                type="button"
+                className="saved-pdf-close-button"
+                onClick={() => setSavedPdfModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="saved-pdf-modal-list">
+              {pdfLibrary.length === 0 ? (
+                <div className="saved-pdf-empty">
+                  No saved PDFs yet.
+                </div>
+              ) : (
+                pdfLibrary.map((pdfItem) => (
+                  <div className="saved-pdf-modal-item" key={pdfItem.id}>
+                    <div className="saved-pdf-modal-name">
+                      {pdfItem.fileName}
+                    </div>
+
+                    <div className="saved-pdf-modal-actions">
+                      <button
+                        type="button"
+                        className="saved-pdf-open-button"
+                        onClick={async () => {
+                          await openPdfFromLibrary(pdfItem);
+                          setSavedPdfModalOpen(false);
+                        }}
+                      >
+                        Open
+                      </button>
+
+                      <button
+                        type="button"
+                        className="saved-pdf-delete-button"
+                        onClick={() => deletePdfDocument(pdfItem)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <CatAgentChat
         open={agentOpen}
         onClose={() => setAgentOpen(false)}

@@ -27,6 +27,9 @@ export default function HistoryPage({
   editingCardBack,
   setEditingCardBack,
 
+  editingNoteType,
+  setEditingNoteType,
+
   customLabels,
 
   saveEditedAnnotation,
@@ -102,7 +105,25 @@ export default function HistoryPage({
             ))}
           </div>
 
-          {annotation.noteType === "flashcard" ? (
+          <div className="note-type-switch">
+            <button
+              type="button"
+              className={editingNoteType === "normal" ? "active" : ""}
+              onClick={() => setEditingNoteType("normal")}
+            >
+              Normal Note
+            </button>
+
+            <button
+              type="button"
+              className={editingNoteType === "flashcard" ? "active" : ""}
+              onClick={() => setEditingNoteType("flashcard")}
+            >
+              Flashcard
+            </button>
+          </div>
+
+          {editingNoteType === "flashcard" ? (
             <>
               <input
                 className="label-input"
