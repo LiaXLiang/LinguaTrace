@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker?url";
 import { createWorker } from "tesseract.js";
-import AuthPanel from "./AuthPanel";
 import NoteCard from "./components/NoteCard";
 import HistoryPage from "./components/HistoryPage";
 import SettingsPanel from "./components/SettingsPanel";
@@ -15,14 +14,18 @@ import "./App.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
+// Temporary dev mode: no Supabase Auth login.
+// Replace this with the full user_id from your existing Supabase rows.
+const DEV_USER_ID = "127b29c6-964e-4d62-bfee-f43e7c3093b6";
+const DEV_USER = { id: DEV_USER_ID };
+
 export default function App() {
   const pageRef = useRef(null);
   const canvasRef = useRef(null);
   const textLayerRef = useRef(null);
   const renderTaskRef = useRef(null);
 
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [user] = useState(DEV_USER);
 
   const [view, setView] = useState("reader");
   const [historyMode, setHistoryMode] = useState("byPdf");
@@ -45,6 +48,10 @@ export default function App() {
   const [annotations, setAnnotations] = useState([]);
   const [draftRect, setDraftRect] = useState(null);
   const [sourceAnnotationId, setSourceAnnotationId] = useState(null);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState(null);
+  const selectedAnnotation = annotations.find(
+    (item) => item.id === selectedAnnotationId
+  );
   const [isDragging, setIsDragging] = useState(false);
   const [startPoint, setStartPoint] = useState(null);
 
@@ -67,11 +74,14 @@ export default function App() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
 
+  
+
   const [latestLimit, setLatestLimit] = useState(2);
   const [flippedFlashcards, setFlippedFlashcards] = useState({});
 
   const [agentOpen, setAgentOpen] = useState(false);
   const [savedPdfModalOpen, setSavedPdfModalOpen] = useState(false);
+  const [flashcardPreviewAnnotation, setFlashcardPreviewAnnotation] = useState(null);
 
   const DEFAULT_AGENT_PROMPT_LABELS = [
     {
@@ -302,46 +312,7 @@ export default function App() {
   }, [labelColors]);
 
   useEffect(() => {
-    async function loadUser() {
-      const { data } = await supabase.auth.getUser();
-      const currentUser = data.user || null;
-
-      setUser(currentUser);
-
-      if (currentUser) {
-        await bootstrapUser(currentUser);
-      }
-
-      setAuthLoading(false);
-    }
-
-    loadUser();
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        const currentUser = session?.user || null;
-
-        setUser(currentUser);
-        setAuthLoading(false);
-
-        if (currentUser) {
-          await bootstrapUser(currentUser);
-        } else {
-          setAnnotations([]);
-          setPdfLibrary([]);
-          setCustomLabels(STARTER_LABELS);
-          setPdfDoc(null);
-          setActivePdfId(null);
-          setPdfName("");
-          setTotalPages(0);
-          setCurrentPage(1);
-        }
-      }
-    );
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    bootstrapUser(DEV_USER);
   }, []);
 
   useEffect(() => {
@@ -364,19 +335,10 @@ export default function App() {
     };
   }, [view, pdfDoc, currentPage, scale]);
 
-  async function signOut() {
-    await supabase.auth.signOut();
-
-    setUser(null);
+  function signOut() {
     setView("reader");
-    setPdfDoc(null);
-    setActivePdfId(null);
-    setPdfLibrary([]);
-    setPdfName("");
-    setAnnotations([]);
-    setCustomLabels(STARTER_LABELS);
-    setDraftRect(null);
-    setStatus("Signed out.");
+    resetSelectionState();
+    setStatus("Authentication is disabled in dev mode.");
   }
 
   async function handlePdfUpload(event) {
@@ -606,6 +568,8 @@ export default function App() {
 
     const point = getPoint(event);
 
+    setSelectedAnnotationId(null);
+    setSourceAnnotationId(null);
     setIsDragging(true);
     setStartPoint(point);
     setExtractedText("");
@@ -923,6 +887,7 @@ export default function App() {
   }
 
   function startEditAnnotation(annotation) {
+    setFlashcardPreviewAnnotation(null);
     setEditingId(annotation.id);
     setEditingLabel(annotation.label || "");
     setEditingNote(annotation.note || "");
@@ -937,7 +902,7 @@ export default function App() {
     setEditingNote("");
     setEditingCardFront("");
     setEditingCardBack("");
-    setEditingNoteType("normal")
+    setEditingNoteType("normal");
   }
 
   async function saveEditedAnnotation(id) {
@@ -1184,6 +1149,10 @@ export default function App() {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, latestLimit);
 
+  const editingAnnotation = editingId
+    ? annotations.find((item) => item.id === editingId)
+    : null;
+
   function toggleFlashcard(annotationId) {
     setFlippedFlashcards((prev) => ({
       ...prev,
@@ -1193,23 +1162,176 @@ export default function App() {
 
 
 
-  if (authLoading) {
-    return (
-      <div className="auth-page">
-        <div className="auth-card">
-          <h2>Loading LinguaTrace...</h2>
-        </div>
-      </div>
-    );
-  }
 
-  if (!user) {
-    return <AuthPanel />;
+  function renderNoteModals() {
+    return (
+      <>
+        {flashcardPreviewAnnotation && (
+        <div
+          className="note-modal-overlay"
+          onClick={() => setFlashcardPreviewAnnotation(null)}
+        >
+          <div className="note-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="note-modal-header">
+              <div>
+                <p className="note-modal-kicker">Flashcard</p>
+                <h2>{flashcardPreviewAnnotation.label || "Unlabeled"}</h2>
+              </div>
+
+              <button
+                type="button"
+                className="note-modal-close-button"
+                onClick={() => setFlashcardPreviewAnnotation(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flashcard-preview-grid">
+              <div className="flashcard-preview-side">
+                <span>Front</span>
+                <p>{flashcardPreviewAnnotation.cardFront || "Empty front"}</p>
+              </div>
+
+              <div className="flashcard-preview-side">
+                <span>Back</span>
+                <p>{flashcardPreviewAnnotation.cardBack || "Empty back"}</p>
+              </div>
+            </div>
+
+            <div className="note-modal-actions">
+              <button
+                type="button"
+                className="note-action-link source-action"
+                onClick={() => {
+                  jumpToAnnotation(flashcardPreviewAnnotation);
+                  setFlashcardPreviewAnnotation(null);
+                }}
+              >
+                Source
+              </button>
+
+              <button
+                type="button"
+                onClick={() => startEditAnnotation(flashcardPreviewAnnotation)}
+              >
+                Modify
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingAnnotation && (
+        <div className="note-modal-overlay" onClick={cancelEditAnnotation}>
+          <div className="note-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="note-modal-header">
+              <div>
+                <p className="note-modal-kicker">
+                  {editingNoteType === "flashcard" ? "Modify flashcard" : "Modify note"}
+                </p>
+                <h2>{editingAnnotation.pdfName || "Untitled PDF"}</h2>
+                <p className="page-info">Page {editingAnnotation.pageNumber}</p>
+              </div>
+
+              <button
+                type="button"
+                className="note-modal-close-button"
+                onClick={cancelEditAnnotation}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="history-edit-form">
+              <input
+                className="label-input"
+                value={editingLabel}
+                onChange={(event) => setEditingLabel(event.target.value)}
+                placeholder="Edit label"
+              />
+
+              <div className="label-suggestions">
+                {customLabels.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={
+                      editingLabel === label ? "label-chip active" : "label-chip"
+                    }
+                    style={{ "--label-color": labelColors[label] || "#64748b" }}
+                    onClick={() => setEditingLabel(label)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="note-type-switch">
+                <button
+                  type="button"
+                  className={editingNoteType === "normal" ? "active" : ""}
+                  onClick={() => setEditingNoteType("normal")}
+                >
+                  Normal Note
+                </button>
+
+                <button
+                  type="button"
+                  className={editingNoteType === "flashcard" ? "active" : ""}
+                  onClick={() => setEditingNoteType("flashcard")}
+                >
+                  Flashcard
+                </button>
+              </div>
+
+              {editingNoteType === "flashcard" ? (
+                <>
+                  <input
+                    className="label-input"
+                    value={editingCardFront}
+                    onChange={(event) => setEditingCardFront(event.target.value)}
+                    placeholder="Edit front side"
+                  />
+
+                  <textarea
+                    value={editingCardBack}
+                    onChange={(event) => setEditingCardBack(event.target.value)}
+                    placeholder="Edit back side"
+                  />
+                </>
+              ) : (
+                <textarea
+                  value={editingNote}
+                  onChange={(event) => setEditingNote(event.target.value)}
+                  placeholder="Edit note"
+                />
+              )}
+            </div>
+
+            <div className="note-modal-actions">
+              <button type="button" className="user-button" onClick={cancelEditAnnotation}>
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => saveEditedAnnotation(editingAnnotation.id)}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </>
+    );
   }
 
   if (view === "history") {
   return (
-    <HistoryPage
+    <>
+      <HistoryPage
       annotations={annotations}
       pdfLibrary={pdfLibrary}
       historyMode={historyMode}
@@ -1221,6 +1343,7 @@ export default function App() {
       flippedFlashcards={flippedFlashcards}
       toggleFlashcard={toggleFlashcard}
       jumpToAnnotation={jumpToAnnotation}
+      onOpenFlashcard={setFlashcardPreviewAnnotation}
       labelColors={labelColors}
 
       editingId={editingId}
@@ -1243,6 +1366,8 @@ export default function App() {
       startEditAnnotation={startEditAnnotation}
       deleteAnnotation={deleteAnnotation}
     />
+      {renderNoteModals()}
+    </>
   );
 }
 
@@ -1367,11 +1492,15 @@ export default function App() {
                       <div
                         key={annotation.id}
                         className={
-                          annotation.id === sourceAnnotationId
+                          annotation.id === sourceAnnotationId || annotation.id === selectedAnnotationId
                             ? "highlight source-highlight"
                             : "highlight saved-highlight"
                         }
                         style={rectToStyle(annotation.rect)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedAnnotationId(annotation.id);
+                        }}
                       />
                     ))}
 
@@ -1522,7 +1651,10 @@ export default function App() {
                         ? "label-chip active"
                         : "label-chip"
                     }
-                    style={{ "--label-color": labelColors[label] || "#64748b" }}
+                    style={{
+                      "--label-color":
+                        labelColors[label] || "#64748b",
+                    }}
                     onClick={() => setLabelText(label)}
                   >
                     {label}
@@ -1536,52 +1668,115 @@ export default function App() {
 
           <section className="latest-card">
             <div className="section-title-row">
-              <h2>Latest Notes</h2>
-              <button
-                className="ghost-button"
-                onClick={() => setView("history")}
-              >
-                View All
-              </button>
+              <h2>{selectedAnnotation ? "Selected Note" : "Latest Notes"}</h2>
+
+              {selectedAnnotation ? (
+                <button
+                  className="ghost-button"
+                  onClick={() => setSelectedAnnotationId(null)}
+                >
+                  Back
+                </button>
+              ) : (
+                <button
+                  className="ghost-button"
+                  onClick={() => setView("history")}
+                >
+                  View All
+                </button>
+              )}
             </div>
 
-            <label className="compact-control">
-              See recent 
-              <input
-                type="number"
-                min="1"
-                max={annotations.length || 1}
-                value={latestLimit}
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  if (!value) {
-                    setLatestLimit(1);
-                    return;
-                  }
-
-                  setLatestLimit(Math.max(1, Math.min(value, annotations.length || 1)));
-                }}
-              />
-              records
-            </label>
-
-            <div className="notes-list">
-              {latestNotes.length === 0 && (
-                <div className="empty-card">No notes yet.</div>
-              )}
-
-              {latestNotes.map((annotation) => (
+            {selectedAnnotation ? (
+              <div className="notes-list">
                 <NoteCard
-                  key={annotation.id}
-                  annotation={annotation}
+                  annotation={selectedAnnotation}
                   onDelete={deleteAnnotation}
                   flippedFlashcards={flippedFlashcards}
                   toggleFlashcard={toggleFlashcard}
                   jumpToAnnotation={jumpToAnnotation}
+                  onOpenFlashcard={setFlashcardPreviewAnnotation}
                   labelColors={labelColors}
+                  showManageActions
+                  onEdit={startEditAnnotation}
+
+                  editingId={editingId}
+                  editingLabel={editingLabel}
+                  setEditingLabel={setEditingLabel}
+                  editingNote={editingNote}
+                  setEditingNote={setEditingNote}
+                  editingCardFront={editingCardFront}
+                  setEditingCardFront={setEditingCardFront}
+                  editingCardBack={editingCardBack}
+                  setEditingCardBack={setEditingCardBack}
+                  editingNoteType={editingNoteType}
+                  setEditingNoteType={setEditingNoteType}
+                  customLabels={customLabels}
+                  saveEditedAnnotation={saveEditedAnnotation}
+                  cancelEditAnnotation={cancelEditAnnotation}
+                  startEditAnnotation={startEditAnnotation}
                 />
-              ))}
-            </div>
+              </div>
+            ) : (
+              <>
+                <label className="compact-control">
+                  See recent
+                  <input
+                    type="number"
+                    min="1"
+                    max={annotations.length || 1}
+                    value={latestLimit}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      if (!value) {
+                        setLatestLimit(1);
+                        return;
+                      }
+
+                      setLatestLimit(Math.max(1, Math.min(value, annotations.length || 1)));
+                    }}
+                  />
+                  records
+                </label>
+
+                <div className="notes-list">
+                  {latestNotes.length === 0 && (
+                    <div className="empty-card">No notes yet.</div>
+                  )}
+
+                  {latestNotes.map((annotation) => (
+                    <NoteCard
+                      key={annotation.id}
+                      annotation={annotation}
+                      onDelete={deleteAnnotation}
+                      flippedFlashcards={flippedFlashcards}
+                      toggleFlashcard={toggleFlashcard}
+                      jumpToAnnotation={jumpToAnnotation}
+                      onOpenFlashcard={setFlashcardPreviewAnnotation}
+                      labelColors={labelColors}
+                      showManageActions
+                      onEdit={startEditAnnotation}
+
+                      editingId={editingId}
+                      editingLabel={editingLabel}
+                      setEditingLabel={setEditingLabel}
+                      editingNote={editingNote}
+                      setEditingNote={setEditingNote}
+                      editingCardFront={editingCardFront}
+                      setEditingCardFront={setEditingCardFront}
+                      editingCardBack={editingCardBack}
+                      setEditingCardBack={setEditingCardBack}
+                      editingNoteType={editingNoteType}
+                      setEditingNoteType={setEditingNoteType}
+                      customLabels={customLabels}
+                      saveEditedAnnotation={saveEditedAnnotation}
+                      cancelEditAnnotation={cancelEditAnnotation}
+                      startEditAnnotation={startEditAnnotation}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </section>
         </aside>
       </main>
@@ -1642,6 +1837,7 @@ export default function App() {
           </div>
         </div>
       )}
+      {renderNoteModals()}
       <CatAgentChat
         open={agentOpen}
         onClose={() => setAgentOpen(false)}

@@ -16,6 +16,7 @@ export default function HistoryPage({
   flippedFlashcards,
   toggleFlashcard,
   jumpToAnnotation,
+  onOpenFlashcard,
 
   editingId,
   editingLabel,
@@ -105,25 +106,7 @@ export default function HistoryPage({
             ))}
           </div>
 
-          <div className="note-type-switch">
-            <button
-              type="button"
-              className={editingNoteType === "normal" ? "active" : ""}
-              onClick={() => setEditingNoteType("normal")}
-            >
-              Normal Note
-            </button>
-
-            <button
-              type="button"
-              className={editingNoteType === "flashcard" ? "active" : ""}
-              onClick={() => setEditingNoteType("flashcard")}
-            >
-              Flashcard
-            </button>
-          </div>
-
-          {editingNoteType === "flashcard" ? (
+          {annotation.noteType === "flashcard" ? (
             <>
               <input
                 className="label-input"
@@ -160,10 +143,6 @@ export default function HistoryPage({
   }
 
   function renderNoteCard(annotation) {
-    if (editingId === annotation.id) {
-      return renderEditCard(annotation);
-    }
-
     return (
       <NoteCard
         key={annotation.id}
@@ -174,6 +153,7 @@ export default function HistoryPage({
         flippedFlashcards={flippedFlashcards}
         toggleFlashcard={toggleFlashcard}
         jumpToAnnotation={jumpToAnnotation}
+        onOpenFlashcard={onOpenFlashcard}
         labelColors={labelColors}
       />
     );

@@ -9,6 +9,7 @@ export default function NoteCard({
   flippedFlashcards,
   toggleFlashcard,
   jumpToAnnotation,
+  onOpenFlashcard,
 
   labelColors = {},
 }) {
@@ -19,9 +20,7 @@ export default function NoteCard({
   const labelColor = labelColors[label] || "#64748b";
 
   const displayText = isFlashcard
-    ? isFlipped
-      ? annotation.cardBack || "Empty back"
-      : annotation.cardFront || "Empty front"
+    ? annotation.cardFront || "Empty front"
     : annotation.note || "No note content.";
 
   return (
@@ -32,7 +31,14 @@ export default function NoteCard({
           : "note-card compact-note-card"
       }
       onClick={() => {
-        if (isFlashcard) toggleFlashcard(annotation.id);
+        if (!isFlashcard) return;
+
+        if (onOpenFlashcard) {
+          onOpenFlashcard(annotation);
+          return;
+        }
+
+        toggleFlashcard(annotation.id);
       }}
     >
       <div className="note-card-top-row">
@@ -63,7 +69,7 @@ export default function NoteCard({
       <div className="note-card-footer">
         <span className="note-card-meta">
           Page {annotation.pageNumber}
-          {isFlashcard && ` · ${isFlipped ? "Back" : "Front"}`}
+          {isFlashcard && " · Front"}
         </span>
 
         <div className="note-card-inline-actions">
@@ -78,7 +84,7 @@ export default function NoteCard({
             Source
           </button>
 
-          {showManageActions && (
+          {showManageActions && onEdit && (
             <button
               type="button"
               className="note-action-link modify-action"

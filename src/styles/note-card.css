@@ -261,3 +261,117 @@
   right: 20px;
   font-size: 24px;
 }
+
+
+
+
+/* Add this to src/styles/history.css or src/styles/note-card.css */
+
+.note-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.note-modal {
+  width: min(640px, 92vw);
+  max-height: min(760px, 90vh);
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 28px;
+  padding: 28px;
+  background: #0f172a;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.note-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.note-modal-header h2 {
+  margin: 4px 0 0;
+}
+
+.note-modal-kicker {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.note-modal-close-button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.35);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.flashcard-preview-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.flashcard-preview-side {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.flashcard-preview-side span {
+  display: block;
+  margin-bottom: 10px;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.flashcard-preview-side p {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1.15rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.note-modal .history-edit-form {
+  display: grid;
+  gap: 14px;
+}
+
+.note-modal .history-edit-form textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.note-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.note-card-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

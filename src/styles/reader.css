@@ -54,6 +54,8 @@
   pointer-events: none;
 }
 
+
+
 .highlight {
   position: absolute;
   border-radius: 4px;
@@ -69,6 +71,12 @@
   border: 2px solid rgba(239, 68, 68, 0.98);
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2),
               0 0 18px rgba(239, 68, 68, 0.55);
+}
+
+.saved-highlight,
+.source-highlight {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .draft-highlight {
@@ -243,3 +251,5 @@
   border: none;
   border-radius: 2px;
 }
+
+
